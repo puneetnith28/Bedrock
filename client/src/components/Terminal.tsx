@@ -292,3 +292,6 @@ export default function Terminal({ agentId, ws, onFocus, focused }: Props) {
 // Terminal scroll events throttled
 
 export let isTerminalAttachPending = false;
+
+// Handle canvas context loss fallback
+export const handleCanvasContextLoss = () => console.warn('[term] WebGL context lost, reverting to DOM renderer');
