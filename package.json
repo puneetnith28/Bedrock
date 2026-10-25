@@ -70,7 +70,7 @@
     "marked": "^18.0.0",
     "openai": "^6.49.0",
     "uuid": "^10.0.0",
-    "ws": "^8.18.0"
+    "ws": "^8.22.0"
   },
   "optionalDependencies": {
     "node-pty": "^1.2.0-beta.12"
@@ -80,7 +80,7 @@
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@types/uuid": "^10.0.0",
-    "@types/ws": "^8.5.12",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^4.3.1",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
