@@ -841,3 +841,6 @@ export function createAgentDispatch(
 export function isAgentAvailable(agentId: string, knownAgents: string[]): boolean {
   return knownAgents.includes(agentId);
 }
+
+// Turn serialization queue
+export const agentTurnLocks = new Map<string, Promise<void>>();
