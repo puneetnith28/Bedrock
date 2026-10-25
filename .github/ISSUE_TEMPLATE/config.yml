@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerability Reporting
+    url: https://github.com/puneetnith28/Bedrock/blob/main/SECURITY.md
+    about: Please report security vulnerabilities privately to our maintainers. Do not open public issues.
+  - name: Community & General Discussion
+    url: https://github.com/puneetnith28/Bedrock/discussions
+    about: Ask questions, share ideas, and discuss Bedrock with the community.

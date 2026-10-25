@@ -41,5 +41,5 @@ Closes #
 
 - [ ] My code adheres to the project's coding standards and conventions.
 - [ ] Commit messages follow the [Conventional Commits](https://www.conventionalcommits.org/) specification.
-- [ ] I have reviewed the [CONTRIBUTING.md](CONTRIBUTING.md) guide and [Code of Conduct](CODE_OF_CONDUCT.md).
+- [ ] I have reviewed the [CONTRIBUTING.md](https://github.com/puneetnith28/Bedrock/blob/main/CONTRIBUTING.md) guide and [Code of Conduct](https://github.com/puneetnith28/Bedrock/blob/main/CODE_OF_CONDUCT.md).
 - [ ] This PR does not introduce any unintended files, secrets, or temporary artifacts.
