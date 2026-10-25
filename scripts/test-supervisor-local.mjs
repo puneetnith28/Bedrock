@@ -64,6 +64,12 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r));
 process.env.LOCAL_LLM_BASE_URL = `http://127.0.0.1:${server.address().port}/v1`;
 delete process.env.LOCAL_LLM_MODEL;
 
+// supervisorProvider also reads ~/.conduit/settings.json: keep it out of the real home.
+const os = await import('node:os');
+const path = await import('node:path');
+const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'bedrock-sup-'));
+process.env.HOME = HOME;
+process.env.USERPROFILE = HOME;
 const { supervisorProvider } = await import('../src/strands/config.ts');
 const { createSupervisorAgent } = await import('../src/strands/agent.ts');
 

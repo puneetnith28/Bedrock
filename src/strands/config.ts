@@ -1,6 +1,7 @@
 // Ensure .env is loaded — from the cwd and from ~/.conduit/.env, so the
 // packaged desktop app (whose cwd is its install directory) sees it too.
 import '../env.js';
+import { savedLocalLlm } from '../local-llm.js';
 
 export const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 
@@ -49,7 +50,8 @@ export function supervisorDisabled(): boolean {
 export type SupervisorProvider = 'auto' | 'anthropic' | 'bedrock' | 'local';
 
 export function supervisorProvider(): SupervisorProvider {
-  const v = (process.env.SUPERVISOR_PROVIDER || '').trim().toLowerCase();
+  // The environment first, then what the Settings screen saved.
+  const v = ((process.env.SUPERVISOR_PROVIDER || '').trim() || (savedLocalLlm().supervisorProvider || '')).trim().toLowerCase();
   if (v === 'anthropic' || v === 'claude') return 'anthropic';
   if (v === 'bedrock' || v === 'aws') return 'bedrock';
   if (v === 'local' || v === 'ollama' || v === 'lmstudio') return 'local';

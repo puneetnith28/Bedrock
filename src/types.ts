@@ -159,6 +159,7 @@ export type WSServerMessage =
   | { type: 'org:changed' }
   | { type: 'memory:updated'; projectId: string }
   | { type: 'plugins:changed' }
+  | { type: 'settings:changed' }
   | { type: 'codex:item'; agentId: string; item: CodexItem }
   | { type: 'supervisor:update'; payload: any }
   | { type: 'groupchat:message'; payload: any }
