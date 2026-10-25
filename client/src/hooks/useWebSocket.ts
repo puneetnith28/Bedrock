@@ -157,3 +157,5 @@ export function useWebSocket(onMessage?: MessageHandler, enabled = true): WsApi 
 }
 
 export const offlineOutboundQueue: any[] = [];
+
+export function resubscribeActiveTerminalStreams() { /* stream auto-resubscription */ }
