@@ -14,6 +14,9 @@ export const CONDUIT_MARKER = '<!-- Conduit -->';
 export const CONDUIT_END_MARKER = '<!-- End Conduit -->';
 export const BEDROCK_MARKER = '<!-- Bedrock -->';
 export const BEDROCK_END_MARKER = '<!-- End Bedrock -->';
+/** The markers written today (see `buildConduitSection` in pty-manager). */
+export const PRIMARY_MARKER = '<!-- BEDROCK_INSTRUCTIONS_START -->';
+export const PRIMARY_END_MARKER = '<!-- BEDROCK_INSTRUCTIONS_END -->';
 
 /** Which file each CLI reads its project instructions from. */
 export const INSTRUCTION_FILES: Record<string, string> = {
@@ -36,7 +39,11 @@ export function stripConduitSection(text: string): string {
   return text
     .replace(/\n*<!-- AgentOrg[^>]*-->[\s\S]*?<!-- End AgentOrg -->\n*/g, '\n')
     .replace(/\n*<!-- Conduit[^>]*-->[\s\S]*?<!-- End Conduit -->\n*/g, '\n')
-    .replace(/\n*<!-- Bedrock[^>]*-->[\s\S]*?<!-- End Bedrock -->\n*/g, '\n');
+    .replace(/\n*<!-- Bedrock[^>]*-->[\s\S]*?<!-- End Bedrock -->\n*/g, '\n')
+    // The markers buildConduitSection writes today. The `Bedrock` pattern above
+    // is case-sensitive and does not match them, so without this line every
+    // start appended another copy and a delete left the section behind.
+    .replace(/\n*<!-- BEDROCK_INSTRUCTIONS_START -->[\s\S]*?<!-- BEDROCK_INSTRUCTIONS_END -->\n*/g, '\n');
 }
 
 /**
@@ -56,7 +63,8 @@ export function removeConduitSections(cwd: string, projectName?: string): string
     try {
       if (!fs.existsSync(file)) continue;
       const before = fs.readFileSync(file, 'utf-8');
-      if (!before.includes(CONDUIT_MARKER) && !before.includes(BEDROCK_MARKER) && !before.includes('<!-- AgentOrg')) continue;
+      if (!before.includes(PRIMARY_MARKER) && !before.includes(CONDUIT_MARKER)
+        && !before.includes(BEDROCK_MARKER) && !before.includes('<!-- AgentOrg')) continue;
       const after = stripConduitSection(before).trim();
 
       // `# <project name>` on its own is the file Conduit created from nothing.
@@ -70,6 +78,3 @@ export function removeConduitSections(cwd: string, projectName?: string): string
   }
   return touched;
 }
-
-export const PRIMARY_MARKER = '<!-- BEDROCK_INSTRUCTIONS_START -->';
-export const PRIMARY_END_MARKER = '<!-- BEDROCK_INSTRUCTIONS_END -->';
