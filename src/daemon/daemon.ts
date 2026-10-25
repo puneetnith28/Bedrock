@@ -1,3 +1,4 @@
+import { StatusEngine } from './status-engine.js';
 /**
  * conduit-daemon — owns every agent PTY process and outlives the web server.
  *
