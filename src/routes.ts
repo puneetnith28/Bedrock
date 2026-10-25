@@ -15,6 +15,8 @@ import { VALID_CLIS } from './cli-registry.js';
 import { removeConduitSections } from './instruction-files.js';
 import { discoverSkills } from './skills.js';
 import * as memory from './memory.js';
+import { readAgentTemplates } from './agent-templates.js';
+import { listPlugins, pluginsDir, setPluginEnabled, PLUGIN_API_VERSION } from './plugins.js';
 
 function expandHome(p: string): string {
   if (p === '~') return os.homedir();
@@ -548,6 +550,47 @@ export function createRouter(
     if (!memory.forgetFact(req.params.id, req.params.fid)) { res.status(404).json({ error: 'Fact not found' }); return; }
     broadcast({ type: 'memory:updated', projectId: req.params.id });
     res.status(204).end();
+  });
+
+  // --- Agent definitions in the project's .bedrock/agents/*.yaml ---
+  router.get('/projects/:id/agent-templates', (req: Request, res: Response) => {
+    const data = storage.getProjectData(req.params.id);
+    if (!data) { res.status(404).json({ error: 'Project not found' }); return; }
+    const { templates, problems } = readAgentTemplates(data.project.cwd);
+    const have = new Set(data.agents.map((a) => a.name.toLowerCase()));
+    res.json({ templates: templates.map((t) => ({ ...t, exists: have.has(t.name.toLowerCase()) })), problems });
+  });
+
+  router.post('/projects/:id/agent-templates/import', (req: Request, res: Response) => {
+    const data = storage.getProjectData(req.params.id);
+    if (!data) { res.status(404).json({ error: 'Project not found' }); return; }
+    const { templates, problems } = readAgentTemplates(data.project.cwd);
+    const have = new Set(data.agents.map((a) => a.name.toLowerCase()));
+    const created: Agent[] = [];
+    const skipped: string[] = [];
+    for (const t of templates) {
+      if (have.has(t.name.toLowerCase())) { skipped.push(t.name); continue; }
+      try { fs.mkdirSync(t.cwd, { recursive: true }); } catch { /* best-effort */ }
+      const agent = storage.createAgent(req.params.id, t.name, t.cli, t.cwd, t.role, t.terminal ? { terminal: true } : undefined);
+      if (agent) { created.push(agent); have.add(t.name.toLowerCase()); }
+    }
+    if (created.length) broadcast({ type: 'org:changed' });
+    res.json({ created, skipped, problems });
+  });
+
+  // --- Machine-level plugins (~/.conduit/plugins) ---
+  router.get('/plugins', (_req: Request, res: Response) => {
+    res.json({ apiVersion: PLUGIN_API_VERSION, dir: pluginsDir(), plugins: listPlugins() });
+  });
+
+  router.put('/plugins/:name', (req: Request, res: Response) => {
+    let enabled: string[];
+    try { enabled = setPluginEnabled(req.params.name, !!req.body?.enabled); }
+    catch (err) { res.status(400).json({ error: (err as Error).message }); return; }
+    // The daemon runs the plugins; tell it to reload from the new setting.
+    daemon.command({ op: 'plugins:reload' });
+    broadcast({ type: 'plugins:changed' });
+    res.json({ enabled });
   });
 
   // --- Plans (Supervisor proposals awaiting human approval) ---

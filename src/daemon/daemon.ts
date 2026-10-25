@@ -23,6 +23,7 @@ import { cleanStaleCodexMcp } from '../mcp-config.js';
 import { Orchestrator } from './orchestrator.js';
 import { hookEvents } from './hook-events.js';
 import { attachWatcher, detachWatcher, supervisorHealth, triggerGate } from '../strands/watcher.js';
+import { emitToPlugins, hasPlugins, loadPlugins } from '../plugins.js';
 import { resetGateSettingsCache } from '../gate-policy.js';
 import {
   orgSnapshot,
@@ -69,7 +70,16 @@ function broadcast(msg: DaemonMessage) {
   for (const ws of clients) {
     if (ws.readyState === WebSocket.OPEN) ws.send(data);
   }
+  // Machine-level plugins observe every event — a copy, so none can alter
+  // what the web server is sent. See src/plugins.ts.
+  if (hasPlugins()) emitToPlugins(JSON.parse(data));
 }
+
+loadPlugins().then((list) => {
+  const on = list.filter((p) => p.loaded).map((p) => p.name);
+  if (on.length) console.log(`[daemon] plugins loaded: ${on.join(', ')}`);
+  for (const p of list) if (p.error) console.warn(`[daemon] plugin ${p.name}: ${p.error}`);
+}).catch((err) => console.warn('[daemon] plugins could not load:', err));
 
 // ─────────────────────────── Status engine ───────────────────────────
 // Derives precise status from Claude lifecycle hooks + process liveness.
@@ -296,6 +306,9 @@ async function handleRequest(ws: WebSocket, req: DaemonRequest): Promise<void> {
       case 'brain:switch': orchestrator.switchConversation(req.conversationId); return;
       case 'brain:delete': orchestrator.deleteConversation(req.conversationId); return;
       case 'gates:reload': resetGateSettingsCache(); return;
+      case 'plugins:reload':
+        loadPlugins().catch((err) => console.warn('[daemon] plugin reload failed:', err));
+        return;
       case 'gate:answer':
         runtime.answerPermission(req.agentId, typeof req.optionId === 'string' ? req.optionId : null);
         return;
