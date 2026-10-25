@@ -89,9 +89,10 @@ try {
   t(lh.interruptAgent(agent.id), 'interrupt cancels the running turn');
   t((await slow).stopReason === 'cancelled', 'the cancelled turn reports cancelled');
   const agentTexts = () => items(agent.id).filter((i) => i.kind === 'message' && i.role === 'agent').map((i) => i.text);
-  t(await waitFor(() => agentTexts().slice(-2).join('|')
-    === 'You said: [Message from Ana]: echo:first|You said: [Message from Ana]: echo:second'),
-  'then runs the queued messages in order, attributed to their sender', agentTexts().slice(-2).join('|'));
+  t(await waitFor(() => agentTexts().slice(-2).join('|') === 'first|second'),
+    'then runs the queued messages in order', agentTexts().slice(-2).join('|'));
+  t(items(agent.id).some((i) => i.kind === 'message' && i.role === 'user' && i.text === '[Message from Ana]: echo:first'),
+    'each attributed to its sender in the transcript');
   t(items(agent.id).some((i) => i.kind === 'system' && i.text === 'Turn cancelled.'), 'says the turn was cancelled');
   t(!lh.interruptAgent(agent.id) || lh.getSessionInfo(agent.id).busy, 'interrupt is a no-op when idle');
 

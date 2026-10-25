@@ -391,6 +391,40 @@ export async function askAgentDispatch(
     return { ok: true, status: r.status, ...base, reply: r.reply };
   }
 
+  if (runtime.isLocalHarnessSession(agent.id)) {
+    // LocalHarness over ACP: the reply is the text of exactly the turn this
+    // prompt starts (it waits its turn if the agent is busy). Terminal-mode
+    // LocalHarness agents fall through to plain delivery below.
+    const r = await runtime.askLocalHarnessAgent(
+      agent.id,
+      `[Message from Bedrock Orchestrator]: ${message.replace(/\r/g, '').trim()}`,
+      TURN_TIMEOUT_MS,
+    );
+    if (r.timedOut) {
+      return {
+        ok: true,
+        status: 'busy',
+        ...base,
+        reply: null,
+        error:
+          `Agent is still working after ${Math.round(TURN_TIMEOUT_MS / 1000)}s — ` +
+          'do NOT resend the same message. Wait and ask again later.',
+      };
+    }
+    if (r.stopReason === 'error') {
+      return runtime.isAgentRunning(agent.id)
+        ? { ok: false, status: 'no-reply', ...base, reply: null, error: r.error }
+        : { ok: false, status: 'crashed', ...base, reply: null, error: `${r.error || 'Agent exited'} — report to the user; do not resend.` };
+    }
+    if (r.stopReason === 'cancelled') {
+      return {
+        ok: false, status: 'no-reply', ...base, reply: null,
+        error: 'The turn was cancelled — a person stopped it or refused something it asked for. Do not resend without asking them.',
+      };
+    }
+    return { ok: true, status: r.text ? 'replied' : 'no-reply', ...base, reply: r.text || null };
+  }
+
   // Gemini / OpenCode — deliver the message; reply capture not supported.
   const injected = runtime.injectMessage(agent.id, 'Bedrock Orchestrator', message);
   return {
@@ -433,8 +467,9 @@ export function forgetAgentReady(agentId: string): void {
 }
 
 function waitForAgentReady(agentId: string, cli: string): Promise<void> {
-  // Codex (app-server): the thread already exists once startAgent resolved.
-  if (cli === 'codex') return Promise.resolve();
+  // Codex (app-server) and LocalHarness (ACP): the thread or session already
+  // exists once startAgent resolved, and a prompt sent early is queued, not lost.
+  if (cli === 'codex' || runtime.isLocalHarnessSession(agentId)) return Promise.resolve();
   if (cli !== 'claude') return sleep(16_000);
   return new Promise((resolve) => {
     let done = false;
