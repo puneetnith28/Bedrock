@@ -28,7 +28,7 @@ export interface BrainMessage {
 }
 
 /** Which CLI backs the Keeper. */
-export type BrainEngine = 'codex' | 'claude';
+export type BrainEngine = 'codex' | 'claude' | 'localharness';
 
 export type BrainStatus = 'idle' | 'thinking';
 

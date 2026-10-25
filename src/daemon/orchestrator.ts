@@ -26,6 +26,7 @@ import type { BrainEngine, BrainEvent, BrainMessage, BrainState, BrainStatus } f
 import { findOnPath } from '../cli-registry.js';
 import * as storage from '../storage.js';
 import { DAEMON_HTTP_URL } from './protocol.js';
+import { LocalHarnessKeeper } from './keeper-localharness.js';
 
 const __dirname_ = path.dirname(fileURLToPath(import.meta.url));
 
@@ -433,6 +434,15 @@ export class Orchestrator {
    * the conversation shows what happened.
    */
   abortTurn(): boolean {
+    // LocalHarness: no child to kill — cancel the ACP turn; its prompt then
+    // resolves and send()'s finally block returns the Keeper to idle.
+    if (this.busy && this.engine() === 'localharness' && this.lhKeeper().abort()) {
+      if (!this.aborting) {
+        this.aborting = true;
+        this.append(this.current(), { role: 'system', text: 'Cancelled by user — the Keeper stopped mid-turn.' });
+      }
+      return true;
+    }
     const child = this.currentChild;
     console.log('[orchestrator] abortTurn called — busy:', this.busy, 'child pid:', child?.pid ?? null);
     if (!child || !this.busy) {
@@ -483,15 +493,43 @@ export class Orchestrator {
     const v = (process.env.CONDUIT_KEEPER_ENGINE || '').trim().toLowerCase();
     if (v === 'claude') return 'claude';
     if (v === 'codex') return 'codex';
+    if (v === 'localharness' || v === 'local') return 'localharness';
     // Auto: prefer Codex when it is actually usable, else fall back to Claude
     // rather than failing every turn.
     if (findOnPath('codex')) return 'codex';
     if (findOnPath('claude')) return 'claude';
+    // Neither cloud CLI: a Keeper on the local model beats one that fails
+    // every turn. Only reached where the Keeper did not work at all before.
+    if (LocalHarnessKeeper.available()) return 'localharness';
     return 'codex';
   }
 
+  /** The LocalHarness engine, made on first use (it needs the MCP server path). */
+  private lhKeeperInstance: LocalHarnessKeeper | null = null;
+  private lhKeeper(): LocalHarnessKeeper {
+    if (!this.lhKeeperInstance) {
+      this.lhKeeperInstance = new LocalHarnessKeeper({
+        brainDir: BRAIN_DIR,
+        mcp: {
+          command: process.execPath,
+          args: [this.conduitMcpPath, '--daemon', DAEMON_HTTP_URL],
+          env: { ELECTRON_RUN_AS_NODE: '1' },
+        },
+      });
+    }
+    return this.lhKeeperInstance;
+  }
+
   private runTurn(conv: Conversation, prompt: string): Promise<void> {
-    return this.engine() === 'claude'
+    const engine = this.engine();
+    if (engine === 'localharness') {
+      this.ensureBrainEnv();
+      // The spoken-summary rule and the roster ride on every turn, as for Claude.
+      return this.lhKeeper().runTurn(conv.id, prompt + TURN_SUFFIX + currentRoster(), {
+        append: (role, text, tool) => this.append(conv, { role, text, ...(tool ? { tool } : {}) }),
+      });
+    }
+    return engine === 'claude'
       ? this.runClaudeTurn(conv, prompt)
       : this.runCodexTurn(conv, prompt);
   }
