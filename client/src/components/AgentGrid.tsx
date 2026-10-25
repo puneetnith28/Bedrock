@@ -224,12 +224,15 @@ function AgentPane({
 
       <div className="pane-body">
         {isAlive ? (
-          agent.cli === 'codex' ? (
+          // Codex, and LocalHarness outside terminal mode, stream structured
+          // items rather than a terminal.
+          agent.cli === 'codex' || (agent.cli === 'localharness' && !agent.flags?.terminal) ? (
             <CodexAgentView
               agentId={agent.id}
               ws={ws}
               onFocus={onFocus}
               focused={focused}
+              variant={agent.cli === 'codex' ? 'codex' : 'localharness'}
             />
           ) : (
             <Terminal

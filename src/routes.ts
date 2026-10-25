@@ -351,6 +351,8 @@ export function createRouter(
     const flags: Agent['flags'] = {
       dangerouslySkipPermissions: !!flagsIn.dangerouslySkipPermissions,
       remoteControl: !!flagsIn.remoteControl,
+      // LocalHarness only: its interactive REPL in a terminal, not an ACP session.
+      ...(cli === 'localharness' && flagsIn.terminal ? { terminal: true } : {}),
     };
     const agent = storage.createAgent(req.params.id, name, cli, agentCwd, role, flags);
     if (!agent) { res.status(404).json({ error: 'Project not found' }); return; }
@@ -367,7 +369,11 @@ export function createRouter(
     if (typeof b.cli === 'string' && VALID_CLIS.includes(b.cli as Agent['cli'])) updates.cli = b.cli as Agent['cli'];
     if (b.flags && typeof b.flags === 'object') {
       const f = b.flags as Record<string, unknown>;
-      updates.flags = { dangerouslySkipPermissions: !!f.dangerouslySkipPermissions, remoteControl: !!f.remoteControl };
+      updates.flags = {
+        dangerouslySkipPermissions: !!f.dangerouslySkipPermissions,
+        remoteControl: !!f.remoteControl,
+        ...(f.terminal ? { terminal: true } : {}),
+      };
     }
     const agent = storage.updateAgent(req.params.id, req.params.aid, updates);
     if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }

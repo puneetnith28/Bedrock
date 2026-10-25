@@ -115,6 +115,9 @@ export type WSClientMessage =
   | { type: 'terminal:resize'; agentId: string; cols: number; rows: number }
   | { type: 'codex:send'; agentId: string; text: string; model?: string; effort?: string }
   | { type: 'codex:new-thread'; agentId: string }
+  // LocalHarness (ACP): a whole composer message as one prompt, and cancel the turn.
+  | { type: 'localharness:send'; agentId: string; text: string }
+  | { type: 'localharness:cancel'; agentId: string }
   | { type: 'brain:send'; message: string }
   | { type: 'brain:new' }
   | { type: 'brain:abort' }
@@ -157,7 +160,7 @@ export type WSServerMessage =
   | { type: 'codex:item'; agentId: string; item: CodexItem }
   | { type: 'supervisor:update'; payload: any }
   | { type: 'groupchat:message'; payload: any }
-  | { type: 'gate:triggered'; agentId: string; projectId: string; prompt: string; source: GateSource; options?: string[] }
+  | { type: 'gate:triggered'; agentId: string; projectId: string; prompt: string; source: GateSource; options?: string[]; acpOptions?: GateOption[] }
   | { type: 'gate:resolved'; agentId: string }
   | { type: 'plan:created'; plan: Plan }
   | { type: 'plan:resolved'; planId: string; decision: string }

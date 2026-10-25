@@ -278,6 +278,9 @@ async function handleRequest(ws: WebSocket, req: DaemonRequest): Promise<void> {
         runtime.newCodexThread(req.agentId).catch((err) =>
           console.error('[daemon] codex new-thread error:', err));
         return;
+      case 'localharness:send':
+        if (typeof req.text === 'string') runtime.sendLocalHarnessPrompt(req.agentId, req.text);
+        return;
       case 'brain:send':
         orchestrator.send(req.message).catch((err) =>
           console.error('[daemon] brain send error:', err));

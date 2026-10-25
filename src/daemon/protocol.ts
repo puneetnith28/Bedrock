@@ -6,7 +6,7 @@
  * local-only WebSocket.
  */
 
-import type { GateSource } from '../types.js';
+import type { GateOption, GateSource } from '../types.js';
 
 export const DAEMON_HOST = '127.0.0.1';
 export const DAEMON_PORT = parseInt(process.env.CONDUIT_DAEMON_PORT || '3210', 10);
@@ -132,6 +132,7 @@ export type DaemonCommand =
   | { op: 'terminal:resize'; agentId: string; cols: number; rows: number }
   | { op: 'codex:send'; agentId: string; text: string; model?: string; effort?: string }
   | { op: 'codex:new-thread'; agentId: string }
+  | { op: 'localharness:send'; agentId: string; text: string }
   | { op: 'brain:send'; message: string }
   | { op: 'brain:new' }
   | { op: 'brain:abort' }
@@ -172,7 +173,7 @@ export type DaemonMessage =
   | { kind: 'event'; event: 'org:changed' }
   | { kind: 'event'; event: 'supervisor:update'; payload: { agentId: string; projectId: string; classification: string; summary: string; ts: string } }
   | { kind: 'event'; event: 'groupchat:message'; payload: any }
-  | { kind: 'event'; event: 'gate:triggered'; agentId: string; projectId: string; prompt: string; source: GateSource; options?: string[] }
+  | { kind: 'event'; event: 'gate:triggered'; agentId: string; projectId: string; prompt: string; source: GateSource; options?: string[]; acpOptions?: GateOption[] }
   | { kind: 'event'; event: 'gate:resolved'; agentId: string }
   | { kind: 'event'; event: 'codex:item'; agentId: string; item: CodexItem };
 
@@ -183,6 +184,8 @@ export interface GateEvent {
   prompt: string;
   source: GateSource;
   options?: string[];
+  /** source 'acp': the offered answers, so a UI can pick one by id. */
+  acpOptions?: GateOption[];
 }
 
 /** Result shapes for each RPC op (for type-safe clients). */

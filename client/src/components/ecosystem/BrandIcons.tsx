@@ -24,6 +24,9 @@ export const BrandIcons: Record<string, React.FC<{ size?: number }>> = {
   nvidia: ({ size = 20 }) => (
     <img src="/icons/nvidia.svg" alt="NVIDIA" width={size} height={size} className="brand-icon-img" />
   ),
+  localharness: ({ size = 20 }) => (
+    <img src="/icons/localharness.svg" alt="LocalHarness" width={size} height={size} className="brand-icon-img" />
+  ),
 
   // Developer Ecosystem
   github: ({ size = 20 }) => (
@@ -102,6 +105,7 @@ export const ECOSYSTEM_ROWS: Array<{
       { id: 'opencode', name: 'OpenCode', iconKey: 'opencode', category: 'agents' },
       { id: 'gpt', name: 'GPT-OSS 120B (Groq)', iconKey: 'groq', category: 'agents' },
       { id: 'nemotron', name: 'Nemotron (OpenRouter)', iconKey: 'nemotron', category: 'agents' },
+      { id: 'localharness', name: 'LocalHarness (local model)', iconKey: 'localharness', category: 'agents' },
     ],
   },
   // ROW 2 — DEVELOPER ECOSYSTEM (→ right)

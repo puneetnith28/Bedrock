@@ -199,7 +199,7 @@ export function triggerGate(
   );
   try { appendGroupChat(projectId, entry); } catch { /* ignore */ }
   broadcast({ kind: 'event', event: 'groupchat:message', payload: { ...entry, projectId } });
-  broadcast({ kind: 'event', event: 'gate:triggered', agentId, projectId, prompt: clean, source, ...(options ? { options } : {}) });
+  broadcast({ kind: 'event', event: 'gate:triggered', agentId, projectId, prompt: clean, source, ...(options ? { options, acpOptions } : {}) });
   return true;
 }
 

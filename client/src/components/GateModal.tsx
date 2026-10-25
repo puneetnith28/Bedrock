@@ -9,12 +9,14 @@ interface Props {
   /** Total agents blocked on an approval, this one included. */
   queued?: number;
   onClose: () => void;
-  onResolve: (decision: 'approve' | 'reject' | 'custom', customInput?: string) => Promise<void> | void;
+  /** `optionId`: for an ACP gate, the exact answer chosen from the agent's own options. */
+  onResolve: (decision: 'approve' | 'reject' | 'custom', customInput?: string, optionId?: string) => Promise<void> | void;
 }
 
 const YES_NO = /\[y\/N\]|\[Y\/n\]|\(yes\/no\)|\(y\/n\)/i;
 
 export default function GateModal({ project, agent, gate, queued = 1, onClose, onResolve }: Props) {
+  const acpOptions = gate?.source === 'acp' ? gate.acpOptions || [] : [];
   const [customInput, setCustomInput] = useState('');
   const [showCustom, setShowCustom] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -22,12 +24,12 @@ export default function GateModal({ project, agent, gate, queued = 1, onClose, o
 
   const yesNo = !!gate && gate.source === 'regex' && YES_NO.test(gate.prompt);
 
-  const resolve = async (decision: 'approve' | 'reject' | 'custom', input?: string) => {
+  const resolve = async (decision: 'approve' | 'reject' | 'custom', input?: string, optionId?: string) => {
     if (busy) return;
     setBusy(true);
     setError(null);
     try {
-      await onResolve(decision, input);
+      await onResolve(decision, input, optionId);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setBusy(false);
@@ -76,12 +78,21 @@ export default function GateModal({ project, agent, gate, queued = 1, onClose, o
           <strong>{agent.name}</strong> in <strong>{project?.name || agent.projectId}</strong>
           {gate.source === 'supervisor'
             ? ' is about to do something the Supervisor flagged as risky.'
-            : yesNo
-              ? ' is waiting for a yes / no answer.'
-              : ' hit a command or prompt that matches a risk pattern.'}
+            : gate.source === 'acp'
+              ? ' is asking permission. Choose one of its answers.'
+              : yesNo
+                ? ' is waiting for a yes / no answer.'
+                : ' hit a command or prompt that matches a risk pattern.'}
         </p>
 
         <pre className="modal-pre">{gate.prompt}</pre>
+
+        {gate.source === 'acp' && (
+          <p className="modal-note">
+            The agent waits until you answer. “Always” and “Never” are remembered by
+            LocalHarness for this workspace; the others apply to this request only.
+          </p>
+        )}
 
         {!yesNo && gate.source === 'regex' && (
           <p className="modal-note">
@@ -96,7 +107,26 @@ export default function GateModal({ project, agent, gate, queued = 1, onClose, o
 
         {error && <div className="modal-error">{error}</div>}
 
-        {!showCustom ? (
+        {!showCustom && acpOptions.length > 0 ? (
+          <div className="modal-actions">
+            <button type="button" onClick={() => setShowCustom(true)} disabled={busy}>Refuse and say instead…</button>
+            {acpOptions.map((o) => {
+              const allow = o.kind.startsWith('allow');
+              const key = o.kind === 'allow_once' ? 'y' : o.kind === 'reject_once' ? 'n' : null;
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  className={allow ? 'primary' : 'danger'}
+                  onClick={() => void resolve(allow ? 'approve' : 'reject', undefined, o.id)}
+                  disabled={busy}
+                >
+                  {o.name}{key && <> <kbd>{key}</kbd></>}
+                </button>
+              );
+            })}
+          </div>
+        ) : !showCustom ? (
           <div className="modal-actions">
             <button type="button" onClick={() => setShowCustom(true)} disabled={busy}>Type a reply…</button>
             <button type="button" className="danger" onClick={() => void resolve('reject')} disabled={busy}>
@@ -108,7 +138,11 @@ export default function GateModal({ project, agent, gate, queued = 1, onClose, o
           </div>
         ) : (
           <div className="modal-custom">
-            <label htmlFor="gate-custom">Send this to the agent's terminal</label>
+            <label htmlFor="gate-custom">
+              {gate.source === 'acp'
+                ? 'Refuse the request, then send the agent this instead'
+                : 'Send this to the agent\'s terminal'}
+            </label>
             <input
               id="gate-custom"
               autoFocus
