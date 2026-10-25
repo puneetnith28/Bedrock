@@ -8,6 +8,8 @@
 // explains itself on stderr. The prompt text picks the script:
 //
 //   hello   → two message chunks, then end_turn
+//   slowstart → bring-up progress lines, then the answer
+//   countpokes → after 1.2s, how many blank lines arrived on stdin meanwhile
 //   think   → a thought chunk, then a message
 //   write   → an edit tool call that asks permission first
 //   slow    → waits until cancelled
@@ -30,6 +32,7 @@ let nextId = 1000;
 let sessionId = null;
 let mode = 'auto';
 let pendingCancel = null;
+let pokes = 0;
 const waiting = new Map();
 
 const send = (msg) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...msg }) + '\n');
@@ -49,6 +52,20 @@ async function runTurn(text) {
   if (text === 'hello') {
     say('Hello');
     say(' world');
+    return 'end_turn';
+  }
+  if (text === 'countpokes') {
+    // How many blank lines arrived while this turn was waiting.
+    const before = pokes;
+    await new Promise((r) => setTimeout(r, 1200));
+    say(String(pokes - before));
+    return 'end_turn';
+  }
+  if (text === 'slowstart') {
+    // LocalHarness's bring-up progress lines, streamed as agent text, then the answer.
+    say('Starting the session — 2s so far…');
+    say('Starting the session — 17s so far…');
+    say('ready');
     return 'end_turn';
   }
   if (text === 'think') {
@@ -145,7 +162,8 @@ async function onRequest(msg) {
 
 const rl = readline.createInterface({ input: process.stdin });
 rl.on('line', (line) => {
-  if (!line.trim()) return;
+  // Blank lines are the client's keep-awake writes: not messages, but counted.
+  if (!line.trim()) { pokes++; return; }
   const msg = JSON.parse(line);
   if (msg.id !== undefined && msg.method === undefined) {
     const resolve = waiting.get(msg.id);

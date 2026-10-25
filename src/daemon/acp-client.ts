@@ -37,6 +37,12 @@ export interface AcpProcessOptions {
   shell?: boolean;
   /** Prefix for log lines. */
   label?: string;
+  /**
+   * While a request to the agent is outstanding, write a bare newline to its
+   * stdin this often (ms); 0 disables it. Defaults to 1000 on Windows, 0
+   * elsewhere — see `keepAwake` for why.
+   */
+  keepAwakeMs?: number;
 }
 
 /** Answer one request the agent sent us. Return the JSON-RPC `result`. */
@@ -80,6 +86,7 @@ export class AcpConnection {
   private buf = '';
   private stderr = '';
   private exited = false;
+  private wakeTimer: ReturnType<typeof setInterval> | null = null;
   private readonly pending = new Map<number, Pending>();
   private readonly notificationListeners = new Set<NotificationListener>();
   private readonly exitListeners = new Set<ExitListener>();
@@ -187,17 +194,57 @@ export class AcpConnection {
       const timer = timeoutMs > 0
         ? setTimeout(() => {
           this.pending.delete(id);
+          this.keepAwake();
           reject(new AcpError(`${this.label}: ${method} timed out after ${Math.round(timeoutMs / 1000)}s`));
         }, timeoutMs)
         : null;
       this.pending.set(id, { method, resolve, reject, timer });
       this.send({ jsonrpc: '2.0', id, method, params });
+      this.keepAwake();
     });
+  }
+
+  /**
+   * Keep the agent's stdin supplied while we wait on it — a workaround for a
+   * Windows deadlock, measured against LocalHarness 0.22.0.
+   *
+   * An ACP agent reads stdin on a thread that sits in a blocking ReadFile. On
+   * Windows, synchronous I/O on one file object is serialised, so another
+   * thread that touches the same handle while loading a DLL waits for that
+   * read to finish. LocalHarness hits this on its first prompt, when its
+   * memory plugin imports numpy: the import hung inside the C-extension load
+   * until something arrived on stdin. A client waiting for the reply sends
+   * nothing, so the session never came up — the turn hung forever with
+   * "Starting the session — 2s so far…" and no request reached the model.
+   * Writing to stdin once a second released it every time.
+   *
+   * A bare newline is data but not a message: JSON-RPC over newline-delimited
+   * stdio skips blank lines. (A `$/…` notification also worked, but
+   * LocalHarness logs every unknown notification as an error.) It runs only
+   * while a request is outstanding, so an idle agent is left alone.
+   */
+  private keepAwake(): void {
+    const every = this.opts.keepAwakeMs ?? (process.platform === 'win32' ? 1000 : 0);
+    const want = every > 0 && this.pending.size > 0 && !this.exited;
+    if (want && !this.wakeTimer) {
+      this.wakeTimer = setInterval(() => this.poke(), every);
+      this.wakeTimer.unref?.();
+    } else if (!want && this.wakeTimer) {
+      clearInterval(this.wakeTimer);
+      this.wakeTimer = null;
+    }
   }
 
   /** Send a notification (no reply), e.g. `session/cancel`. */
   notify(method: string, params: Record<string, unknown> = {}): void {
     this.send({ jsonrpc: '2.0', method, params });
+  }
+
+  /** Write a bare newline: data on stdin that is not a message. See `keepAwake`. */
+  poke(): void {
+    const stdin = this.proc?.stdin;
+    if (!stdin || !stdin.writable || this.exited) return;
+    try { stdin.write('\n'); } catch { /* reported via exit */ }
   }
 
   /**
@@ -248,6 +295,7 @@ export class AcpConnection {
       const p = this.pending.get(msg.id);
       if (!p) return;
       this.pending.delete(msg.id);
+      this.keepAwake();
       if (p.timer) clearTimeout(p.timer);
       if (msg.error) {
         p.reject(new AcpError(
@@ -295,6 +343,7 @@ export class AcpConnection {
 
   private handleExit(code: number | null, signal: NodeJS.Signals | null): void {
     this.exited = true;
+    if (this.wakeTimer) { clearInterval(this.wakeTimer); this.wakeTimer = null; }
     const tail = this.stderr.trim().split('\n').slice(-5).join('\n');
     const why = `${this.label}: agent exited (code ${code ?? 'none'}${signal ? `, ${signal}` : ''})`
       + (tail ? `\n${tail}` : '');
