@@ -13,8 +13,66 @@
  *   LOCAL_LLM_API_KEY    default: none — local servers usually take no key
  */
 import './env.js';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 export const DEFAULT_LOCAL_LLM_BASE_URL = 'http://127.0.0.1:11434/v1';
+
+/**
+ * What the Settings screen saved, in ~/.conduit/settings.json under
+ * `localLlm`. An environment variable still wins over it — the same order
+ * .env already follows — and the screen says which one is in effect.
+ */
+export interface SavedLocalLlm {
+  baseUrl?: string;
+  model?: string;
+  apiKey?: string;
+  /** Overrides SUPERVISOR_PROVIDER when that is unset. */
+  supervisorProvider?: string;
+}
+
+function settingsFile(): string {
+  return path.join(os.homedir(), '.conduit', 'settings.json');
+}
+
+export function savedLocalLlm(): SavedLocalLlm {
+  try {
+    const v = JSON.parse(fs.readFileSync(settingsFile(), 'utf-8'))?.localLlm;
+    return v && typeof v === 'object' ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Save (merge) the Settings screen's values. Empty strings clear a field. */
+export function saveLocalLlm(next: SavedLocalLlm): SavedLocalLlm {
+  let all: Record<string, any> = {};
+  try { all = JSON.parse(fs.readFileSync(settingsFile(), 'utf-8')) || {}; } catch { /* new file */ }
+  const merged: Record<string, string> = { ...(all.localLlm || {}) };
+  for (const [k, v] of Object.entries(next)) {
+    if (typeof v !== 'string') continue;
+    if (v.trim()) merged[k] = v.trim(); else delete merged[k];
+  }
+  all.localLlm = merged;
+  fs.mkdirSync(path.dirname(settingsFile()), { recursive: true });
+  fs.writeFileSync(settingsFile(), JSON.stringify(all, null, 2), 'utf-8');
+  resetLocalModelsCache();
+  return merged;
+}
+
+/** Which source each value comes from — for the Settings screen. */
+export function localLlmSources(): Record<'baseUrl' | 'model' | 'apiKey' | 'supervisorProvider', 'env' | 'settings' | 'default'> {
+  const saved = savedLocalLlm();
+  const src = (envKey: string, savedVal?: string) =>
+    (process.env[envKey] || '').trim() ? 'env' as const : (savedVal || '').trim() ? 'settings' as const : 'default' as const;
+  return {
+    baseUrl: src('LOCAL_LLM_BASE_URL', saved.baseUrl),
+    model: src('LOCAL_LLM_MODEL', saved.model),
+    apiKey: src('LOCAL_LLM_API_KEY', saved.apiKey),
+    supervisorProvider: src('SUPERVISOR_PROVIDER', saved.supervisorProvider),
+  };
+}
 
 export interface LocalLlmSettings {
   /** OpenAI-compatible base URL, ending in /v1. */
@@ -49,12 +107,13 @@ export function normalizeBaseUrl(raw: string): string | null {
 }
 
 export function localLlmSettings(): LocalLlmSettings {
-  const rawUrl = (process.env.LOCAL_LLM_BASE_URL || '').trim();
+  const saved = savedLocalLlm();
+  const rawUrl = (process.env.LOCAL_LLM_BASE_URL || '').trim() || (saved.baseUrl || '').trim();
   const baseUrl = normalizeBaseUrl(rawUrl) || DEFAULT_LOCAL_LLM_BASE_URL;
   return {
     baseUrl,
-    model: (process.env.LOCAL_LLM_MODEL || '').trim(),
-    apiKey: (process.env.LOCAL_LLM_API_KEY || '').trim() || 'none',
+    model: (process.env.LOCAL_LLM_MODEL || '').trim() || (saved.model || '').trim(),
+    apiKey: (process.env.LOCAL_LLM_API_KEY || '').trim() || (saved.apiKey || '').trim() || 'none',
     configured: !!normalizeBaseUrl(rawUrl),
   };
 }

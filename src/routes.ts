@@ -16,7 +16,10 @@ import { removeConduitSections } from './instruction-files.js';
 import { discoverSkills } from './skills.js';
 import * as memory from './memory.js';
 import { readAgentTemplates } from './agent-templates.js';
-import { listLocalModels, localLlmSettings } from './local-llm.js';
+import {
+  listLocalModels, localLlmSettings, localLlmSources, normalizeBaseUrl, saveLocalLlm, savedLocalLlm,
+} from './local-llm.js';
+import { supervisorProvider } from './strands/config.js';
 import { listPlugins, pluginsDir, setPluginEnabled, PLUGIN_API_VERSION } from './plugins.js';
 
 function expandHome(p: string): string {
@@ -576,6 +579,39 @@ export function createRouter(
     } catch (err) {
       res.status(503).json({ error: 'Daemon unavailable: ' + (err instanceof Error ? err.message : String(err)) });
     }
+  });
+
+  // Local model server + Supervisor provider settings (Settings screen).
+  router.get('/local-llm/settings', (_req: Request, res: Response) => {
+    const saved = savedLocalLlm();
+    const eff = localLlmSettings();
+    res.json({
+      // Never echo a key back; say only whether one is set.
+      saved: { baseUrl: saved.baseUrl || '', model: saved.model || '', supervisorProvider: saved.supervisorProvider || '', hasApiKey: !!saved.apiKey },
+      sources: localLlmSources(),
+      effective: { baseUrl: eff.baseUrl, model: eff.model, configured: eff.configured, supervisorProvider: supervisorProvider() },
+    });
+  });
+
+  router.put('/local-llm/settings', (req: Request, res: Response) => {
+    const b = (req.body || {}) as Record<string, unknown>;
+    const next: Record<string, string> = {};
+    if (typeof b.baseUrl === 'string') {
+      if (b.baseUrl.trim() && !normalizeBaseUrl(b.baseUrl)) { res.status(400).json({ error: 'baseUrl must be an http(s) URL' }); return; }
+      next.baseUrl = b.baseUrl.trim() ? normalizeBaseUrl(b.baseUrl)! : '';
+    }
+    if (typeof b.model === 'string') next.model = str(b.model, 200);
+    if (typeof b.apiKey === 'string') next.apiKey = str(b.apiKey, 500);
+    if (typeof b.supervisorProvider === 'string') {
+      const p = b.supervisorProvider.trim().toLowerCase();
+      if (p && !['auto', 'bedrock', 'anthropic', 'local'].includes(p)) {
+        res.status(400).json({ error: 'supervisorProvider must be auto, bedrock, anthropic or local' }); return;
+      }
+      next.supervisorProvider = p === 'auto' ? '' : p;
+    }
+    saveLocalLlm(next);
+    broadcast({ type: 'settings:changed' });
+    res.json({ ok: true, sources: localLlmSources(), effective: { ...localLlmSettings(), apiKey: undefined, supervisorProvider: supervisorProvider() } });
   });
 
   // The local model server's models — for the agent and Supervisor model pickers.

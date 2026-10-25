@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Ic from './Icons';
+import LocalModelSettings from './LocalModelSettings';
 
 interface ModelOption { id: string; label: string }
 interface VoiceOption { id: string; label: string }
@@ -294,6 +295,8 @@ export default function SettingsModal({ open, onClose, onSaved, onRestartTour }:
         </header>
 
         <div className="settings-body">
+          <LocalModelSettings />
+
           {/* Speech-to-text Card */}
           <section className="settings-card">
             <div className="settings-card-header">

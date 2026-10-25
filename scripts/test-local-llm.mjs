@@ -15,6 +15,13 @@ registerHooks({
   },
 });
 
+// Saved settings live in ~/.conduit/settings.json: use a temp home, never the real one.
+import os from 'node:os';
+import path from 'node:path';
+const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'bedrock-llm-'));
+process.env.HOME = HOME;
+process.env.USERPROFILE = HOME;
+
 const {
   DEFAULT_LOCAL_LLM_BASE_URL,
   normalizeBaseUrl,
@@ -22,6 +29,9 @@ const {
   listLocalModels,
   resetLocalModelsCache,
   pickModel,
+  saveLocalLlm,
+  savedLocalLlm,
+  localLlmSources,
 } = await import('../src/local-llm.ts');
 
 let pass = 0, fail = 0;
@@ -52,6 +62,19 @@ t(s.configured && s.baseUrl === 'http://127.0.0.1:1234/v1' && s.model === 'qwen3
 process.env.LOCAL_LLM_BASE_URL = 'garbage';
 t(!localLlmSettings().configured && localLlmSettings().baseUrl === DEFAULT_LOCAL_LLM_BASE_URL,
   'an unusable URL falls back to the default and is not counted as configured');
+
+// 2b. Saved settings (the Settings screen) — the environment still wins.
+for (const k of ['LOCAL_LLM_BASE_URL', 'LOCAL_LLM_MODEL', 'LOCAL_LLM_API_KEY']) delete process.env[k];
+saveLocalLlm({ baseUrl: 'http://127.0.0.1:1234/v1', model: 'saved-model', apiKey: 'sk-local' });
+let sv = localLlmSettings();
+t(sv.baseUrl === 'http://127.0.0.1:1234/v1' && sv.model === 'saved-model' && sv.apiKey === 'sk-local' && sv.configured, 'saved settings apply when the environment is silent');
+t(localLlmSources().baseUrl === 'settings', 'and are reported as coming from settings');
+process.env.LOCAL_LLM_MODEL = 'env-model';
+t(localLlmSettings().model === 'env-model' && localLlmSources().model === 'env', 'an environment variable beats a saved value');
+delete process.env.LOCAL_LLM_MODEL;
+saveLocalLlm({ model: '', apiKey: '' });
+t(savedLocalLlm().model === undefined && savedLocalLlm().apiKey === undefined && savedLocalLlm().baseUrl, 'an empty value clears just that field');
+saveLocalLlm({ baseUrl: '' });
 
 // 3. The probe, against a mock OpenAI-compatible server.
 let hits = 0;
@@ -105,4 +128,5 @@ t(!down.ok && /No local model server/.test(down.error) && /LOCAL_LLM_BASE_URL/.t
   'an unreachable server names the fix', down.ok ? '' : down.error);
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
+fs.rmSync(HOME, { recursive: true, force: true });
 process.exit(fail ? 1 : 0);
