@@ -773,3 +773,5 @@ export function registerGracefulShutdown(httpServer: any): void {
   process.on('SIGTERM', handler);
   process.on('SIGINT', handler);
 }
+
+process.on('unhandledRejection', (err) => console.error('[unhandledRejection telemetry]', err));
