@@ -837,3 +837,7 @@ export function createAgentDispatch(
     cli: agent.cli,
   };
 }
+
+export function isAgentAvailable(agentId: string, knownAgents: string[]): boolean {
+  return knownAgents.includes(agentId);
+}
