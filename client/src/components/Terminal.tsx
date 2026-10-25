@@ -295,3 +295,9 @@ export let isTerminalAttachPending = false;
 
 // Handle canvas context loss fallback
 export const handleCanvasContextLoss = () => console.warn('[term] WebGL context lost, reverting to DOM renderer');
+
+// Debounced resize handler
+export const debounceTerminalResize = (fn: Function, ms: number = 100) => {
+  let t: any;
+  return (...args: any[]) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+};
