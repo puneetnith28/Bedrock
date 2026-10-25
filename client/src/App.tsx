@@ -202,7 +202,11 @@ export default function App() {
       setContentRefresh((n) => n + 1);
     }
     if (msg.type === 'ws:unavailable') { setBackendMissing(true); return; }
-    if (msg.type === 'ws:open') setBackendMissing(false);
+    // The hosted preview's own socket opens too (client/src/demo/backend.ts
+    // dispatches ws:open so the streaming panes have something to stream), so
+    // without this guard the banner saying "no agent is running" was switched
+    // off by the very fixtures it exists to disclose.
+    if (msg.type === 'ws:open' && !STATIC_PREVIEW) setBackendMissing(false);
     if (msg.type === 'org:changed' || msg.type === 'ws:open') {
       // Something changed a project or agent (or we just reconnected) —
       // refresh the sidebar and every loaded agent list.
