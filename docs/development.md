@@ -100,3 +100,11 @@ npm run build && npm test && npm run smoke
 ```
 
 `npm run build` type-checks both sides first. Keep it green.
+
+
+## Node 22 Flag Requirements
+Bedrock utilizes Node.js 22 native type-stripping flags:
+```bash
+node --experimental-strip-types scripts/run-all-tests.mjs
+```
+If executing scripts directly, ensure Node >= 22.6.0 is active in your environment.
