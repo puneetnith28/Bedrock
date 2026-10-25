@@ -1,0 +1,101 @@
+name: Bug Report
+description: Create a report to help us improve Bedrock
+title: '[Bug]: '
+labels: ['bug', 'triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please search existing issues before submitting.
+        **Security Warning:** If this is a security vulnerability, do NOT file a public issue. See our [Security Policy](https://github.com/puneetnith28/Bedrock/blob/main/SECURITY.md).
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe what happened unexpectedly...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: What steps did you take to encounter this issue?
+      placeholder: |
+        1. Start the Bedrock daemon via `npm run dev`
+        2. Create a project with agent type ...
+        3. Run command ...
+        4. Observe error ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: Explain what should have happened instead...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually occurred?
+      placeholder: Describe the observed behavior or error state...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: agent_cli
+    attributes:
+      label: Relevant Agent CLI (if applicable)
+      description: Which agent type or runtime was active when this occurred?
+      options:
+        - None / Core Bedrock UI or Daemon
+        - Claude Code (`claude`)
+        - Codex CLI (`codex`)
+        - Gemini CLI (`gemini`)
+        - OpenCode (`opencode`)
+        - GPT-OSS / aider (`gpt`)
+        - Nemotron / aider (`nemotron`)
+        - LocalHarness (`localharness`)
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Details
+      description: Please share details about your environment.
+      value: |
+        - OS: [e.g. Ubuntu 24.04, macOS Sonoma, Windows 11]
+        - Node.js Version: [e.g. 22.11.0] (`node -v`)
+        - Bedrock Version: [e.g. 1.0.0]
+        - Browser / Desktop App: [e.g. Chrome 130, Electron Desktop App]
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs & Output
+      description: |
+        Paste terminal output, daemon logs, or browser console errors here.
+        **CRITICAL:** Redact all secrets, API keys (Anthropic, AWS, Groq), tokens, and private paths before pasting.
+      render: shell
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Submission Checklist
+      options:
+        - label: I have verified this is not a duplicate of an existing issue.
+          required: true
+        - label: I have redacted all API keys, secrets, credentials, and private paths from the logs.
+          required: true
+        - label: I am using a supported Node.js version (Node 22+).
+          required: true
