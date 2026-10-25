@@ -760,3 +760,7 @@ export function isolateVoiceWebsocketError(err: Error): void {
 }
 
 // Brotli and Gzip compression enabled
+
+export function parseIncomingWsFrame(data: string | Buffer): any {
+  try { return JSON.parse(data.toString()); } catch { return null; }
+}
