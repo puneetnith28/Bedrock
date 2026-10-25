@@ -1063,3 +1063,5 @@ export function handleEpipeError(err: NodeJS.ErrnoException): void {
 }
 
 export let currentThreadLock: string | null = null;
+
+export const MAX_TRANSCRIPT_TURNS = 100;
