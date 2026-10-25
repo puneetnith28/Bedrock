@@ -1,3 +1,4 @@
+import { createServerApp } from './server-app.js';
 import './env.js'; // .env from the cwd AND ~/.conduit/.env (the desktop app has no repo)
 import { loadedEnvFiles, userEnvPath } from './env.js';
 import express from 'express';
