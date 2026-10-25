@@ -1,3 +1,4 @@
+const SPAWN_TIMEOUT_MS = 30000;
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
