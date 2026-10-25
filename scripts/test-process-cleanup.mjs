@@ -56,16 +56,20 @@ t(isAlive, 'child process is running before termination');
 // Terminate with killProcessTree
 killProcessTree(pid, 'SIGTERM');
 
-// Wait up to 1 second for process to exit
-await new Promise((r) => setTimeout(r, 200));
-
+// Poll rather than sleep a fixed time: on Windows the kill is an asynchronous
+// `taskkill /t /f`, which measured ~450-520ms here — past the 200ms this used
+// to wait, so the check failed although the process did die.
 let isDead = false;
-try {
-  process.kill(pid, 0);
-} catch (err) {
-  if (err && err.code === 'ESRCH') isDead = true;
+for (const deadline = Date.now() + 5000; Date.now() < deadline;) {
+  try {
+    process.kill(pid, 0);
+  } catch (err) {
+    if (err && err.code === 'ESRCH') { isDead = true; break; }
+  }
+  await new Promise((r) => setTimeout(r, 25));
 }
 t(isDead, 'killProcessTree successfully terminates the target process tree');
+if (!isDead) { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } }
 
 // 3. Escalating kill on process ignoring SIGTERM
 if (process.platform !== 'win32') {
