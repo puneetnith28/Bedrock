@@ -1127,3 +1127,12 @@ const WINDOWS_RESERVED_NAMES = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
 export function isWindowsReservedName(baseName: string): boolean {
   return WINDOWS_RESERVED_NAMES.test(baseName.split('.')[0]);
 }
+
+export class ProjectFileMutex {
+  private queue = Promise.resolve();
+  acquire<T>(fn: () => Promise<T>): Promise<T> {
+    const res = this.queue.then(fn);
+    this.queue = res.then(() => {}, () => {});
+    return res;
+  }
+}
