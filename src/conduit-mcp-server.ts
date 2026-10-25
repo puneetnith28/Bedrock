@@ -271,6 +271,45 @@ async function main() {
         },
       },
       {
+        name: 'remember',
+        description:
+          'Record a fact in a project\'s memory. Every agent on that project is told the '
+          + 'newest facts when it starts. Use for decisions and conventions the team should '
+          + 'keep ("API errors use RFC 7807"), not for chatter.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            project: { type: 'string', description: 'Project name or id.' },
+            text: { type: 'string', description: 'The fact, one or two sentences.' },
+          },
+          required: ['project', 'text'],
+        },
+      },
+      {
+        name: 'recall',
+        description: 'Search a project\'s memory. Omit `query` to list every fact, newest first.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            project: { type: 'string', description: 'Project name or id.' },
+            query: { type: 'string', description: 'Words the fact must contain.' },
+          },
+          required: ['project'],
+        },
+      },
+      {
+        name: 'forget',
+        description: 'Remove one fact from a project\'s memory, by the id `recall` shows.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            project: { type: 'string', description: 'Project name or id.' },
+            id: { type: 'string', description: 'The fact id.' },
+          },
+          required: ['project', 'id'],
+        },
+      },
+      {
         name: 'create_project',
         description:
           'Create a new project (team). Needs a name and a working directory ' +
@@ -519,6 +558,36 @@ async function main() {
         const files = body.files || [];
         if (files.length === 0) return text(`${body.projectName} has no shared content files.`);
         return text(`${body.projectName} shared files:\n` + files.map((f) => `- ${f}`).join('\n'));
+      }
+
+      if (name === 'remember' || name === 'forget') {
+        const project = String(a.project || '').trim();
+        if (!project) return err('project is required.');
+        const payload = name === 'remember'
+          ? { project, text: String(a.text || '') }
+          : { project, id: String(a.id || '') };
+        const res = await daemonFetch(
+          `${args.daemonUrl}/org/${name}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) },
+          8000,
+        );
+        const body = (await res.json().catch(() => ({}))) as { ok?: boolean; projectName?: string; error?: string; fact?: { id: string } };
+        if (!body.ok) return err(body.error || `${name} failed.`);
+        return text(name === 'remember'
+          ? `Remembered for ${body.projectName} (id ${body.fact?.id}).`
+          : `Forgot that fact in ${body.projectName}.`);
+      }
+
+      if (name === 'recall') {
+        const project = String(a.project || '').trim();
+        if (!project) return err('project is required.');
+        const qs = `project=${encodeURIComponent(project)}&q=${encodeURIComponent(String(a.query || ''))}`;
+        const res = await daemonFetch(`${args.daemonUrl}/org/memory?${qs}`, undefined, 8000);
+        const body = (await res.json().catch(() => ({}))) as { ok?: boolean; projectName?: string; error?: string; facts?: Array<{ id: string; text: string; source: string }> };
+        if (!body.ok) return err(body.error || 'recall failed.');
+        const facts = body.facts || [];
+        if (!facts.length) return text(`${body.projectName} has no matching facts in memory.`);
+        return text(`${body.projectName} memory:\n` + facts.map((f) => `- [${f.id}] ${f.text} (${f.source})`).join('\n'));
       }
 
       if (name === 'create_project') {

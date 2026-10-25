@@ -14,6 +14,8 @@ import {
   PRIMARY_MARKER, PRIMARY_END_MARKER, instructionFileFor, stripConduitSection,
 } from './instruction-files.js';
 import { localHarnessEnv, removeConfigDir } from './localharness/config-dir.js';
+import { discoverSkills, skillLines } from './skills.js';
+import { memoryLines } from './memory.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname_ = path.dirname(__filename);
@@ -253,6 +255,13 @@ function buildConduitSection(
       );
     }
   }
+
+  // Skills and project memory, for every CLI. Both add nothing when empty, so
+  // a project that uses neither gets exactly the section it always did.
+  try { lines.push(...skillLines(discoverSkills(expandHome(currentAgent.cwd)))); }
+  catch (err) { console.warn('[pty-manager] could not list skills:', err); }
+  try { lines.push(...memoryLines(currentAgent.projectId)); }
+  catch (err) { console.warn('[pty-manager] could not read project memory:', err); }
 
   lines.push('', PRIMARY_END_MARKER, '');
   return { marker, section: lines.join('\n') };

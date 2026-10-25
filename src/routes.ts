@@ -13,6 +13,8 @@ import type { Agent, WSServerMessage, ProjectLayout } from './types.js';
 import { resolveGate, type GateDecision } from './gate-resolve.js';
 import { VALID_CLIS } from './cli-registry.js';
 import { removeConduitSections } from './instruction-files.js';
+import { discoverSkills } from './skills.js';
+import * as memory from './memory.js';
 
 function expandHome(p: string): string {
   if (p === '~') return os.homedir();
@@ -518,6 +520,34 @@ export function createRouter(
     const r = resolveGate(daemon, broadcast, req.params.id, req.params.aid, decision, { customInput, optionId });
     if (!r.ok) { res.status(r.status).json({ error: r.error }); return; }
     res.json({ success: true, action: r.action });
+  });
+
+  // --- Skills (SKILL.md procedures offered to every agent; read-only) ---
+  router.get('/projects/:id/skills', (req: Request, res: Response) => {
+    const data = storage.getProjectData(req.params.id);
+    if (!data) { res.status(404).json({ error: 'Project not found' }); return; }
+    res.json(discoverSkills(data.project.cwd));
+  });
+
+  // --- Project memory (facts every agent on the project is told) ---
+  router.get('/projects/:id/memory', (req: Request, res: Response) => {
+    if (!storage.getProjectData(req.params.id)) { res.status(404).json({ error: 'Project not found' }); return; }
+    res.json(memory.searchFacts(req.params.id, str(req.query.q, 200)));
+  });
+
+  router.post('/projects/:id/memory', (req: Request, res: Response) => {
+    if (!storage.getProjectData(req.params.id)) { res.status(404).json({ error: 'Project not found' }); return; }
+    const fact = memory.addFact(req.params.id, str(req.body?.text, memory.MAX_FACT_CHARS), str(req.body?.source, 80) || 'User');
+    if (!fact) { res.status(400).json({ error: 'text is required' }); return; }
+    broadcast({ type: 'memory:updated', projectId: req.params.id });
+    res.status(201).json(fact);
+  });
+
+  router.delete('/projects/:id/memory/:fid', (req: Request, res: Response) => {
+    if (!storage.getProjectData(req.params.id)) { res.status(404).json({ error: 'Project not found' }); return; }
+    if (!memory.forgetFact(req.params.id, req.params.fid)) { res.status(404).json({ error: 'Fact not found' }); return; }
+    broadcast({ type: 'memory:updated', projectId: req.params.id });
+    res.status(204).end();
   });
 
   // --- Plans (Supervisor proposals awaiting human approval) ---

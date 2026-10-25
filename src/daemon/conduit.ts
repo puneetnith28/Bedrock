@@ -20,6 +20,7 @@ import * as runtime from './runtime.js';
 import type { Agent, Project } from '../types.js';
 import { hookEvents } from './hook-events.js';
 import { VALID_CLIS, isCliId } from '../cli-registry.js';
+import { addFact, forgetFact, searchFacts, type MemoryFact } from '../memory.js';
 
 /** Upper bound on how long `ask_agent` waits for a Claude turn to finish.
  *  When this fires we don't assume the agent failed — we check whether the
@@ -638,6 +639,41 @@ export interface SharedReadResult {
   file?: string;
   content?: string;
   error?: string;
+}
+
+// ─────────────────────────── project memory ───────────────────────────
+
+export interface MemoryResult {
+  ok: boolean;
+  projectName?: string;
+  facts?: MemoryFact[];
+  fact?: MemoryFact;
+  error?: string;
+}
+
+/** The Keeper's `remember`: record a fact every agent on the project will be told. */
+export function rememberDispatch(projectRef: string, text: string, source = 'Keeper'): MemoryResult {
+  const project = resolveProject(projectRef);
+  if (!project) return { ok: false, error: `No project matching "${projectRef}".` };
+  const fact = addFact(project.id, text, source);
+  if (!fact) return { ok: false, projectName: project.name, error: 'Nothing to remember — the text was empty.' };
+  return { ok: true, projectName: project.name, fact };
+}
+
+/** The Keeper's `recall`: facts matching every word of the query (all when empty). */
+export function recallDispatch(projectRef: string, query = ''): MemoryResult {
+  const project = resolveProject(projectRef);
+  if (!project) return { ok: false, error: `No project matching "${projectRef}".` };
+  return { ok: true, projectName: project.name, facts: searchFacts(project.id, query).slice(0, 50) };
+}
+
+/** The Keeper's `forget`. */
+export function forgetDispatch(projectRef: string, factId: string): MemoryResult {
+  const project = resolveProject(projectRef);
+  if (!project) return { ok: false, error: `No project matching "${projectRef}".` };
+  return forgetFact(project.id, factId)
+    ? { ok: true, projectName: project.name }
+    : { ok: false, projectName: project.name, error: `No fact with id "${factId}".` };
 }
 
 /** Read a project's shared content — a file if given, otherwise the file list. */

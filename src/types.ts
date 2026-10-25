@@ -157,6 +157,7 @@ export type WSServerMessage =
   | { type: 'activity'; event: ActivityEvent }
   | { type: 'brain:event'; payload: BrainEvent }
   | { type: 'org:changed' }
+  | { type: 'memory:updated'; projectId: string }
   | { type: 'codex:item'; agentId: string; item: CodexItem }
   | { type: 'supervisor:update'; payload: any }
   | { type: 'groupchat:message'; payload: any }
