@@ -37,7 +37,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = 3200;
 const CDP_PORT = 9833;
-const CLIS = (process.env.DESKTOP_CLI || 'claude,codex,gemini,opencode,gpt,nemotron').split(',');
+const CLIS = (process.env.DESKTOP_CLI || 'claude,codex,gemini,opencode,gpt,nemotron,localharness').split(',');
 /** Cheap, and it cannot answer without actually calling a tool. */
 const KEEPER_QUESTION = 'List every project you can see, then stop. One line.';
 

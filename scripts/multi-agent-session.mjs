@@ -172,6 +172,7 @@ try {
     gemini: 'Reply with one short line naming the two files in this directory.',
     gpt: 'Reply with one short line: what port does server.js listen on?',
     nemotron: 'Reply with one short line summarising notes.md.',
+    localharness: 'Reply with one short line: which file mentions a port number?',
   };
   for (const a of started) {
     const task = TASKS[a.cli] || 'Reply with one short line describing this project.';

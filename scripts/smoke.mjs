@@ -36,6 +36,9 @@ function pickMissingCli() {
     { cli: 'gemini', bin: 'gemini' },
     { cli: 'gpt', bin: 'aider' },
     { cli: 'nemotron', bin: 'aider' },
+    // Last, so machines that lack an earlier one test exactly what they did.
+    // Its binary preflight is the same check whatever runtime it then uses.
+    { cli: 'localharness', bin: 'localharness' },
   ];
   return candidates.find((c) => cliMissing(c.bin)) ?? null;
 }

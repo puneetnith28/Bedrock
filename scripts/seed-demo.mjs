@@ -130,11 +130,13 @@ const CLI_BINARY = {
   opencode: 'opencode',
   gpt: 'aider',
   nemotron: 'aider',
+  localharness: 'localharness',
 };
 
 const LABEL = {
   claude: 'Claude', codex: 'Codex', gemini: 'Gemini',
   opencode: 'OpenCode', gpt: 'Gpt', nemotron: 'Nemotron',
+  localharness: 'LocalHarness',
 };
 
 const INSTALL = {
@@ -144,6 +146,8 @@ const INSTALL = {
   opencode: 'npm install -g opencode-ai',
   gpt: 'uv tool install --python 3.12 aider-chat',
   nemotron: 'uv tool install --python 3.12 aider-chat',
+  // Also needs a local model server (Ollama / LM Studio) to start.
+  localharness: 'uv tool install localharness',
 };
 
 /** Is this binary on PATH? Same question the daemon asks before spawning. */
@@ -164,7 +168,7 @@ function onPath(bin) {
 
 // Only meaningful when the server is on this machine, which is the default.
 const remote = !/^https?:\/\/(localhost|127\.0\.0\.1)(:|$|\/)/.test(BASE);
-const ALL_CLIS = ['claude', 'codex', 'gemini', 'opencode', 'gpt', 'nemotron'];
+const ALL_CLIS = ['claude', 'codex', 'gemini', 'opencode', 'gpt', 'nemotron', 'localharness'];
 const runnable = remote ? ALL_CLIS : ALL_CLIS.filter((c) => onPath(CLI_BINARY[c]));
 const missing = ALL_CLIS.filter((c) => !runnable.includes(c));
 

@@ -143,5 +143,13 @@ t(matchAgent('claude', AGENTS, 'p1').agent?.id === 'a1', 'matchAgent exact name'
 t(matchAgent('lead', AGENTS, 'p1').agent?.id === 'a1', 'matchAgent by role');
 t(!matchAgent('zzzz', AGENTS, 'p1').agent, 'matchAgent misses cleanly');
 
+// --- a LocalHarness agent, reached by its CLI name as spoken --------------
+{
+  const withLocal = [...AGENTS, { id: 'a4', name: 'Scout', cli: 'localharness', projectId: 'p1' }];
+  t(matchAgent('local harness', withLocal, 'p1').agent?.id === 'a4', 'matchAgent finds a LocalHarness agent as "local harness"');
+  t(matchAgent('localharness', withLocal, 'p1').agent?.id === 'a4', 'and as one word');
+  t(matchAgent('local', withLocal, 'p1').agent?.id !== 'a4', 'but not on a bare "local"');
+}
+
 console.log(`\n${pass} passed, ${fail} failed${failures.length ? ':\n  - ' + failures.join('\n  - ') : ''}\n`);
 process.exit(fail ? 1 : 0);
