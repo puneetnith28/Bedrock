@@ -27,5 +27,13 @@ Thumbs.db
 *.swp
 *.swo
 
-
 /plan.md
+
+# Video production artifacts and Remotion studio
+bedrock-video/
+bedrock-product-film*.mp4
+bedrock-contact-sheet*.jpg
+bedrock-captions.srt
+bedrock-narration.md
+bedrock-storyboard.md
+*.mp4
