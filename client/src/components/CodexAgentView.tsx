@@ -1,3 +1,17 @@
+// Dual-key localStorage migration for Bedrock Codex settings
+export const getCodexStorage = (key: string, fallback: string = ''): string => {
+  try {
+    return localStorage.getItem(`bedrock_codex_${key}`) ?? localStorage.getItem(`conduit_codex_${key}`) ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+export const setCodexStorage = (key: string, value: string): void => {
+  try {
+    localStorage.setItem(`bedrock_codex_${key}`, value);
+  } catch {}
+};
+
 /**
  * CodexAgentView — structured view for a Codex agent (v2.2).
  *
