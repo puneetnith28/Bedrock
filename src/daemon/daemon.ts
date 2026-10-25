@@ -832,3 +832,5 @@ if (process.platform === 'win32') {
 export function isLoopbackInterface(ip: string): boolean {
   return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
 }
+
+// Purge client listener weakmaps on disconnect and error
