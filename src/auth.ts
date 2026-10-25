@@ -76,3 +76,7 @@ export function authHeader(): Record<string, string> {
   if (!cfg) return {};
   return { Authorization: 'Basic ' + Buffer.from(`${cfg.user}:${cfg.pass}`).toString('base64') };
 }
+
+export function isValidAuthFormat(authString: string): boolean {
+  return /^[^:]+:[^:]+$/.test(authString);
+}
