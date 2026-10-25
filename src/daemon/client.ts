@@ -11,6 +11,8 @@ import {
   DAEMON_URL,
   type DaemonMessage,
   type DaemonRpcResults,
+  type DaemonRpcParams,
+  type DaemonCommand,
   type BrainEvent,
   type AgentDispatch,
   type CodexItem,
@@ -50,9 +52,12 @@ export class DaemonClient {
   private readonly connectListeners = new Set<ConnectListener>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly outbox: string[] = []; // queued while disconnected
+  private readonly url: string;
   private warnedDown = false;
 
-  constructor(private readonly url: string = DAEMON_URL) {}
+  constructor(url: string = DAEMON_URL) {
+    this.url = url;
+  }
 
   connect(): void {
     if (this.ws) return;
@@ -162,7 +167,7 @@ export class DaemonClient {
   /** RPC call — resolves with the typed result or rejects on daemon error. */
   request<K extends keyof DaemonRpcResults>(
     op: K,
-    params: Record<string, unknown> = {},
+    params?: DaemonRpcParams[K],
   ): Promise<DaemonRpcResults[K]> {
     const id = randomUUID();
     return new Promise<DaemonRpcResults[K]>((resolve, reject) => {
@@ -175,12 +180,12 @@ export class DaemonClient {
         reject,
         timer,
       });
-      this.raw(JSON.stringify({ id, op, ...params }));
+      this.raw(JSON.stringify({ id, op, ...(params || {}) }));
     });
   }
 
   /** Fire-and-forget command (no reply expected). */
-  command(cmd: Record<string, unknown>): void {
+  command(cmd: DaemonCommand): void {
     this.raw(JSON.stringify(cmd));
   }
 

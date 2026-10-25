@@ -105,7 +105,7 @@ export interface CodexItem {
  * Web → Daemon. Messages with an `id` expect a `reply`; messages without an
  * `id` are fire-and-forget commands.
  */
-export type DaemonRequest =
+export type DaemonRpcRequest =
   // --- RPC (expect a reply) ---
   | { id: string; op: 'agent:start'; projectId: string; agentId: string }
   | { id: string; op: 'agent:stop'; agentId: string }
@@ -119,8 +119,10 @@ export type DaemonRequest =
   | { id: string; op: 'agent:replay'; agentId: string }
   | { id: string; op: 'brain:state' }
   | { id: string; op: 'supervisor:health' }
-  | { id: string; op: 'codex:models' }
-  // --- Fire-and-forget commands ---
+  | { id: string; op: 'codex:models' };
+
+// --- Fire-and-forget commands ---
+export type DaemonCommand =
   | { op: 'terminal:attach'; agentId: string }
   | { op: 'terminal:detach'; agentId: string }
   | { op: 'terminal:input'; agentId: string; data: string }
@@ -133,9 +135,25 @@ export type DaemonRequest =
   | { op: 'brain:abort' }
   | { op: 'brain:switch'; conversationId: string }
   | { op: 'brain:delete'; conversationId: string }
-  // The web server owns the settings file; the daemon owns the gates. This
-  // tells the daemon its cached copy is stale.
   | { op: 'gates:reload' };
+
+export type DaemonRequest = DaemonRpcRequest | DaemonCommand;
+
+export type DaemonRpcParams = {
+  'agent:start': { projectId: string; agentId: string };
+  'agent:stop': { agentId: string };
+  'agent:restart': { projectId: string; agentId: string };
+  'agent:cleanup': { projectId: string; agentId: string };
+  'agent:inject': { agentId: string; fromName: string; message: string };
+  'agent:isRunning': { agentId: string };
+  'agent:preview': { agentId: string };
+  'agent:runningIds'?: Record<string, never>;
+  'agent:statuses'?: Record<string, never>;
+  'agent:replay': { agentId: string };
+  'brain:state'?: Record<string, never>;
+  'supervisor:health'?: Record<string, never>;
+  'codex:models'?: Record<string, never>;
+};
 
 /** Daemon → Web. */
 export type DaemonMessage =
@@ -198,10 +216,4 @@ export interface DaemonRpcResults {
   'brain:state': BrainState;
   'supervisor:health': SupervisorHealth;
   'codex:models': { models: string[] };
-}
-
-export interface KeeperProgressEvent {
-  threadId: string;
-  step: number;
-  message: string;
 }
