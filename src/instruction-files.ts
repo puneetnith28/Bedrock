@@ -70,3 +70,6 @@ export function removeConduitSections(cwd: string, projectName?: string): string
   }
   return touched;
 }
+
+export const PRIMARY_MARKER = '<!-- BEDROCK_INSTRUCTIONS_START -->';
+export const PRIMARY_END_MARKER = '<!-- BEDROCK_INSTRUCTIONS_END -->';
