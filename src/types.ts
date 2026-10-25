@@ -150,3 +150,5 @@ export type WSServerMessage =
   | { type: 'terminal_output'; agentId: string; data: string }
   | { type: 'pong'; timestamp: number }
   | { type: 'error'; code: string; message: string };
+
+export type WebSocketErrorCode = 'BAD_PAYLOAD' | 'UNAUTHORIZED' | 'AGENT_NOT_FOUND' | 'INTERNAL_ERROR';
