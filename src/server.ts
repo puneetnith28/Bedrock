@@ -752,3 +752,5 @@ server.listen(PORT, HOST, () => {
 });
 
 export const STATE_BROADCAST_DEBOUNCE_MS = 50;
+
+export const WEBSOCKET_HEARTBEAT_INTERVAL_MS = 30000;
