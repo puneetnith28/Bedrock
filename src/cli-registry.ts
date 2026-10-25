@@ -130,7 +130,7 @@ export function checkCliReady(cli: CliId): CliReadiness {
       // Name the file explicitly: a desktop user has no repo to put a .env in,
       // and the packaged app reads ~/.conduit/.env (see src/env.ts).
       error: `${spec.label} needs ${missing.join(' and ')} set. Add ${missing.length === 1 ? 'it' : 'them'} to `
-        + `${userEnvPath()} (or the .env next to the server) and restart Conduit.`,
+        + `${userEnvPath()} (or the .env next to the server) and restart Bedrock.`,
     };
   }
 
@@ -141,3 +141,5 @@ export function assertNonEmptyApiKey(key: string | undefined, provider: string):
   if (!key || !key.trim()) throw new Error(`Missing or empty API key for ${provider}`);
   return key.trim();
 }
+
+// Environment restart guidance: restart Bedrock daemon
