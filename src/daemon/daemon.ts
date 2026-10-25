@@ -827,3 +827,7 @@ process.on('SIGHUP', () => shutdown('SIGHUP'));
 if (process.platform === 'win32') {
   process.on('SIGBREAK', () => shutdown('SIGBREAK'));
 }
+
+export function isLoopbackInterface(ip: string): boolean {
+  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+}
