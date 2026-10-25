@@ -11,8 +11,9 @@ import { writeClaudeHookConfig, removeClaudeHookConfig } from './hook-config.js'
 import { DAEMON_HOST, DAEMON_PORT } from './daemon/protocol.js';
 import { stripAnsi } from './gatePatterns.js';
 import {
-  PRIMARY_MARKER, PRIMARY_END_MARKER, INSTRUCTION_FILES, stripConduitSection,
+  PRIMARY_MARKER, PRIMARY_END_MARKER, instructionFileFor, stripConduitSection,
 } from './instruction-files.js';
+import { localHarnessEnv, removeConfigDir } from './localharness/config-dir.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname_ = path.dirname(__filename);
@@ -31,7 +32,7 @@ function getHookBaseUrl(): string {
  * written, Claude starts, and the MCP server just never loads), so probe the
  * candidates and warn loudly when none exists.
  */
-function getMcpServerPath(): string | null {
+export function getMcpServerPath(): string | null {
   const candidates = [
     path.resolve(__dirname_, '..', 'mcp-server.mjs'), // bundled into daemon/
     path.resolve(__dirname_, 'mcp-server.mjs'),       // same-dir builds
@@ -52,7 +53,7 @@ function getMcpServerPath(): string | null {
  * Hub URL that the spawned MCP server will call back to. Matches the port
  * that server.ts listens on.
  */
-function getHubUrl(): string {
+export function getHubUrl(): string {
   return process.env.CONDUIT_HUB_URL || `http://localhost:${process.env.PORT || '3200'}`;
 }
 
@@ -70,7 +71,7 @@ function agentEnv(): Record<string, string> {
 }
 
 /** Expand leading ~ to the user's home directory */
-function expandHome(p: string): string {
+export function expandHome(p: string): string {
   if (p.startsWith('~/') || p === '~') {
     return path.join(os.homedir(), p.slice(1));
   }
@@ -314,6 +315,13 @@ function getCliCommand(agent: Agent, sharedPath: string, wikiPath: string, mcpCo
       return { cmd: 'aider', args: aiderArgs('groq/openai/gpt-oss-120b', cwd) };
     case 'nemotron':
       return { cmd: 'aider', args: aiderArgs('openrouter/nvidia/nemotron-3.5-lightning:free', cwd) };
+    case 'localharness':
+      // The interactive REPL, for an agent created in terminal mode. Its model
+      // server, model and Bedrock's MCP server come from the per-agent config
+      // directory in LOCALHARNESS_DIR (see agentEnv), not from flags. No
+      // --trust-project: trusting a workspace is the human's decision, and
+      // LocalHarness asks it in the terminal, where it raises a gate.
+      return { cmd: 'localharness', args: ['start'] };
   }
 }
 
@@ -398,7 +406,7 @@ export function startAgent(agent: Agent, onStatus: (agentId: string, status: str
   }
 
   // Write instruction file in agent's cwd so the CLI knows about shared content + memory + teammates
-  const instrFile = path.join(cwd, INSTRUCTION_FILES[agent.cli]);
+  const instrFile = path.join(cwd, instructionFileFor(agent.cli, cwd));
   try {
     ensureInstructionFile(instrFile, projectName, sharedPath, wikiPath, agent, teammates);
   } catch (err) {
@@ -415,7 +423,7 @@ export function startAgent(agent: Agent, onStatus: (agentId: string, status: str
       cols: 120,
       rows: 30,
       cwd,
-      env: agentEnv(),
+      env: { ...agentEnv(), ...(agent.cli === 'localharness' ? localHarnessEnv(agent.id) : {}) },
     });
   } catch (err) {
     console.error(`Failed to spawn PTY for agent ${agent.id}:`, err);
@@ -621,6 +629,9 @@ export function cleanupMcpConfig(agent: Agent) {
       removeClaudeMcpConfig(agent.id);
       removeClaudeHookConfig(agent.id);
     }
+    // Its LocalHarness config dir holds the MCP server definition, and the
+    // agent's own sessions and memory: all of it goes with the agent.
+    if (agent.cli === 'localharness') removeConfigDir(agent.id);
   } catch (err) {
     console.warn(`[pty-manager] Failed to clean up MCP config for ${agent.name}:`, err);
   }
