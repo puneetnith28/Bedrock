@@ -205,3 +205,5 @@ export function checkCliReady(cli: CliId): CliReadiness {
   return { ok: true, resolved, prerequisites: availability.prerequisites };
 }
 
+
+export const BINARY_PATH_CACHE_TTL = 60000;
