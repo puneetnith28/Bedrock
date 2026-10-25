@@ -1,3 +1,5 @@
+// Consolidating websocket protocol types
+export type { WSClientMessage, WSServerMessage } from '../../../src/types.js';
 /**
  * useWebSocket — one socket to the Conduit server, shared by the whole app.
  *
