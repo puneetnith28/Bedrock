@@ -655,3 +655,5 @@ export function detachWatcher(agentId: string) {
   try { state.teardown(); } catch { /* ignore */ }
   watchers.delete(agentId);
 }
+
+export const SUPERVISOR_BATCH_WINDOW_MS = 100;
