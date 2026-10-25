@@ -139,6 +139,8 @@ export type DaemonCommand =
   | { op: 'brain:switch'; conversationId: string }
   | { op: 'brain:delete'; conversationId: string }
   | { op: 'gates:reload' }
+  // The web server changed which plugins are enabled; reload them.
+  | { op: 'plugins:reload' }
   // Answer an ACP agent's pending permission request: an offered option id,
   // or null to cancel it. Sent only by gate-resolve.ts.
   | { op: 'gate:answer'; agentId: string; optionId: string | null };
