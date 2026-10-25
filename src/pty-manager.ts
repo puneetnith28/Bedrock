@@ -1,6 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { spawn as cpSpawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import type { Agent } from './types.js';
 import { updateAgent, getProjectData, sharedDirFor, wikiDirFor } from './storage.js';
@@ -9,7 +10,7 @@ import { writeClaudeHookConfig, removeClaudeHookConfig } from './hook-config.js'
 import { DAEMON_HOST, DAEMON_PORT } from './daemon/protocol.js';
 import { stripAnsi } from './gatePatterns.js';
 import {
-  CONDUIT_MARKER, CONDUIT_END_MARKER, INSTRUCTION_FILES, stripConduitSection,
+  PRIMARY_MARKER, PRIMARY_END_MARKER, INSTRUCTION_FILES, stripConduitSection,
 } from './instruction-files.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -127,6 +128,25 @@ interface PtySession {
 }
 
 const sessions = new Map<string, PtySession>();
+const pendingTimers = new Map<string, Set<ReturnType<typeof setTimeout>>>();
+
+export let SPAWN_HANDSHAKE_TIMEOUT_MS = 30_000;
+export function getSpawnHandshakeTimeoutMs(): number {
+  return SPAWN_HANDSHAKE_TIMEOUT_MS;
+}
+export function setSpawnHandshakeTimeoutMs(ms: number): void {
+  SPAWN_HANDSHAKE_TIMEOUT_MS = ms;
+}
+
+export function trackTimer(agentId: string, timer: ReturnType<typeof setTimeout>): void {
+  if (!pendingTimers.has(agentId)) pendingTimers.set(agentId, new Set());
+  pendingTimers.get(agentId)!.add(timer);
+}
+
+export function clearTrackedTimer(agentId: string, timer: ReturnType<typeof setTimeout>): void {
+  clearTimeout(timer);
+  pendingTimers.get(agentId)?.delete(timer);
+}
 /** Scroll-back chunks kept per agent. */
 const MAX_BUFFER = 5000;
 /**
@@ -172,7 +192,7 @@ function buildConduitSection(
   currentAgent: Agent,
   teammates: Agent[],
 ): { marker: string; section: string } {
-  const marker = CONDUIT_MARKER;
+  const marker = PRIMARY_MARKER;
   const hasWiki = fs.existsSync(path.join(wikiPath, '_schema.md'));
 
   const lines = [
@@ -232,7 +252,7 @@ function buildConduitSection(
     }
   }
 
-  lines.push('', CONDUIT_END_MARKER, '');
+  lines.push('', PRIMARY_END_MARKER, '');
   return { marker, section: lines.join('\n') };
 }
 
@@ -413,7 +433,28 @@ export function startAgent(agent: Agent, onStatus: (agentId: string, status: str
   // Send the CLI command to the shell (quoted — project names may have spaces)
   proc.write(`${cmd} ${args.map(shellQuote).join(' ')}\r`);
 
+  // Detect hung spawn during telemetry / MCP initialization
+  let handshakeTimer: ReturnType<typeof setTimeout> | null = null;
+  if (agent.cli === 'claude') {
+    handshakeTimer = setTimeout(() => {
+      console.warn(`[pty-manager] Claude Code spawn handshake timed out for agent ${agent.name} after ${SPAWN_HANDSHAKE_TIMEOUT_MS / 1000}s`);
+      stopAgent(agent.id);
+      try {
+        updateAgent(agent.projectId, agent.id, {
+          status: 'stopped',
+          lastExitSignal: 'SPAWN_TIMEOUT',
+        });
+      } catch {}
+      onStatus(agent.id, 'stopped');
+    }, SPAWN_HANDSHAKE_TIMEOUT_MS);
+    trackTimer(agent.id, handshakeTimer);
+  }
+
   proc.onData((data: string) => {
+    if (handshakeTimer) {
+      clearTrackedTimer(agent.id, handshakeTimer);
+      handshakeTimer = null;
+    }
     // Live listeners always get the whole chunk; only the replay copy is
     // trimmed, and a single chunk larger than the whole budget is kept by its
     // tail — the end of a dump is the part a late viewer needs.
@@ -433,11 +474,24 @@ export function startAgent(agent: Agent, onStatus: (agentId: string, status: str
     }
   });
 
-  proc.onExit(({ exitCode }) => {
+  proc.onExit((event: { exitCode?: number; signal?: number | string }) => {
+    if (handshakeTimer) {
+      clearTrackedTimer(agent.id, handshakeTimer);
+      handshakeTimer = null;
+    }
     if (sessions.get(agent.id) === session) sessions.delete(agent.id);
-    console.log(`[pty-manager] ${agent.name} exited (code ${exitCode})`);
-    try { updateAgent(agent.projectId, agent.id, { status: 'stopped', pid: undefined, pendingGate: undefined }); }
-    catch { /* project may have been deleted */ }
+    const exitCode = typeof event.exitCode === 'number' ? event.exitCode : null;
+    const signal = event.signal ? String(event.signal) : null;
+    console.log(`[pty-manager] ${agent.name} exited (code ${exitCode}, signal ${signal || 'none'})`);
+    try {
+      updateAgent(agent.projectId, agent.id, {
+        status: 'stopped',
+        pid: undefined,
+        pendingGate: undefined,
+        lastExitCode: exitCode,
+        lastExitSignal: signal,
+      });
+    } catch { /* project may have been deleted */ }
     onStatus(agent.id, 'stopped');
   });
 
@@ -448,16 +502,69 @@ export function startAgent(agent: Agent, onStatus: (agentId: string, status: str
   updateAgent(agent.projectId, agent.id, {
     status: 'running',
     pid: proc.pid > 0 ? proc.pid : undefined,
+    lastExitCode: null,
+    lastExitSignal: null,
   });
   onStatus(agent.id, 'running');
   return true;
+}
+
+/**
+ * Terminate an entire process tree.
+ * On POSIX systems, sends signal to the process group (-pid).
+ * On Windows systems, invokes taskkill /pid /t /f.
+ */
+export function killProcessTree(pid: number, signal: NodeJS.Signals = 'SIGTERM'): void {
+  if (pid <= 0) return;
+  if (process.platform === 'win32') {
+    try {
+      cpSpawn('taskkill', ['/pid', String(pid), '/t', '/f'], { stdio: 'ignore' });
+    } catch { /* ignore */ }
+  } else {
+    try {
+      process.kill(-pid, signal);
+    } catch {
+      try { process.kill(pid, signal); } catch { /* process already exited */ }
+    }
+  }
+}
+
+/**
+ * Escalate from SIGTERM to SIGKILL if the process does not terminate within timeoutMs.
+ */
+export function escalateProcessKill(pid: number, timeoutMs = 2500): NodeJS.Timeout | null {
+  if (pid <= 0) return null;
+  const timer = setTimeout(() => {
+    try {
+      process.kill(pid, 0);
+      killProcessTree(pid, 'SIGKILL');
+    } catch {
+      /* process exited cleanly before timeout */
+    }
+  }, timeoutMs);
+  timer.unref?.();
+  return timer;
 }
 
 export function stopAgent(agentId: string): boolean {
   const session = sessions.get(agentId);
   if (!session) return false;
   sessions.delete(agentId);
-  try { session.pty.kill(); } catch (err) { console.warn('[pty-manager] kill failed:', err); }
+  const timers = pendingTimers.get(agentId);
+  if (timers) {
+    for (const t of timers) clearTimeout(t);
+    pendingTimers.delete(agentId);
+  }
+  const pid = session.pty.pid;
+  try {
+    if (pid > 0) {
+      killProcessTree(pid, 'SIGTERM');
+      escalateProcessKill(pid, 2500);
+    }
+    session.pty.kill('SIGTERM');
+  } catch (err) {
+    console.warn('[pty-manager] kill failed:', err);
+  }
   try { updateAgent(session.agent.projectId, agentId, { status: 'stopped', pid: undefined, pendingGate: undefined }); }
   catch { /* ignore */ }
   return true;
@@ -494,10 +601,13 @@ export function injectMessage(targetAgentId: string, fromName: string, message: 
   // a standalone CR is read as the Enter key that actually submits the prompt.
   const clean = message.replace(/\r/g, '').trim();
   session.pty.write(`[Message from ${fromName}]: ${clean}`);
-  setTimeout(() => {
+  const timer = setTimeout(() => {
+    pendingTimers.get(targetAgentId)?.delete(timer);
     const s = sessions.get(targetAgentId);
     if (s) s.pty.write('\r');
   }, 150);
+  if (!pendingTimers.has(targetAgentId)) pendingTimers.set(targetAgentId, new Set());
+  pendingTimers.get(targetAgentId)!.add(timer);
   return true;
 }
 
@@ -575,14 +685,4 @@ export function isAgentRunning(agentId: string): boolean {
 
 export function getRunningAgentIds(): string[] {
   return Array.from(sessions.keys());
-}
-
-export function killProcessGroup(pid: number, signal: NodeJS.Signals = 'SIGTERM'): void {
-  try {
-    if (process.platform !== 'win32') {
-      process.kill(-pid, signal);
-    } else {
-      process.kill(pid, signal);
-    }
-  } catch {}
 }
