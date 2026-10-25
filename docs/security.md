@@ -141,3 +141,9 @@ See [Deployment](deployment.md).
 ## Reporting something
 
 Open an issue. If it is exploitable, say so without a working exploit in the title.
+
+
+## Security Boundary Threat Model
+- **Loopback Isolation**: The daemon HTTP and IPC endpoints bind strictly to loopback (`127.0.0.1` / `::1`). External network requests cannot trigger agent execution without explicit authentication.
+- **Process Group Sandboxing**: PTY processes are assigned independent process groups to allow complete process tree destruction on termination.
+- **Credential Storage**: API credentials reside exclusively in `~/.conduit/.env` or memory and are never serialized to Git or client browser bundles.
