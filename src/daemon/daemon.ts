@@ -31,6 +31,9 @@ import {
   readWiki,
   projectOverview,
   readShared,
+  rememberDispatch,
+  recallDispatch,
+  forgetDispatch,
   broadcastDispatch,
   createProjectDispatch,
   createAgentDispatch,
@@ -577,6 +580,28 @@ async function handleHttp(httpReq: IncomingMessage, res: ServerResponse) {
       return;
     }
     sendJson(res, 200, readShared(project, query.get('file') || undefined));
+    return;
+  }
+
+  // GET /org/memory?project=&q= — the project's memory (the Keeper's recall)
+  if (httpReq.method === 'GET' && route === '/org/memory') {
+    const project = (query.get('project') || '').trim();
+    if (!project) { sendJson(res, 400, { ok: false, error: 'project is required' }); return; }
+    sendJson(res, 200, recallDispatch(project, query.get('q') || ''));
+    return;
+  }
+
+  // POST /org/remember {project, text} and /org/forget {project, id}
+  if (httpReq.method === 'POST' && (route === '/org/remember' || route === '/org/forget')) {
+    const parsed = await readJsonBody(httpReq);
+    if (!parsed.ok) { sendJson(res, 400, { ok: false, error: parsed.error }); return; }
+    const body = parsed.body as any;
+    const result = route === '/org/remember'
+      ? rememberDispatch(str(body.project), str(body.text), 'Keeper')
+      : forgetDispatch(str(body.project), str(body.id));
+    // Viewers refresh on org:changed, the memory panel included.
+    if (result.ok) broadcast({ kind: 'event', event: 'org:changed' });
+    sendJson(res, 200, result);
     return;
   }
 

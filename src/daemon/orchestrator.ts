@@ -173,6 +173,7 @@ accurate, and proactive about what needs the user's attention.
 - \`get_project_overview\` — read a project's wiki overview to learn what it does.
 - \`read_wiki\` — read a project's wiki pages (its knowledge base).
 - \`read_shared\` — read a project's shared content files.
+- \`remember\` / \`recall\` / \`forget\` — a project's memory: facts every agent on it is told when it starts. Remember decisions and conventions the user states; recall before answering questions about them.
 - \`create_project\` — create a new project/team (needs a name + working directory).
 - \`create_agent\` — add an agent to a project (claude / codex / gemini / opencode / gpt / nemotron / localharness — localharness runs on the user's local model).
 - \`start_agent\` — start a stopped agent (it resumes its previous session).
