@@ -177,6 +177,16 @@ export function isLocalHarnessSession(agentId: string): boolean {
   return isLocalHarness(agentId);
 }
 
+/** A LocalHarness session's mode, modes, model and slash commands — null when not running. */
+export function localHarnessInfo(agentId: string) {
+  return lh.getSessionInfo(agentId);
+}
+
+/** Switch a LocalHarness session's permission mode (session/set_mode). */
+export function setLocalHarnessMode(agentId: string, mode: string): Promise<{ ok: boolean; error?: string }> {
+  return lh.setMode(agentId, mode);
+}
+
 /** Send a whole composer message to a LocalHarness agent as one prompt. */
 export function sendLocalHarnessPrompt(agentId: string, text: string): boolean {
   return lh.sendPrompt(agentId, text);

@@ -694,6 +694,25 @@ export function getRunningAgentIds(): string[] {
   return [...sessions.keys()];
 }
 
+/**
+ * Switch the permission mode. Only a mode the session offered is accepted —
+ * "unattended" (every ask becomes a yes) included, because LocalHarness offers
+ * it to a person watching the session; the UI says what it means.
+ */
+export async function setMode(agentId: string, mode: string): Promise<{ ok: boolean; error?: string }> {
+  const s = sessions.get(agentId);
+  if (!s) return { ok: false, error: 'The agent is not running.' };
+  if (!s.modes.some((m) => m.id === mode)) {
+    return { ok: false, error: `"${mode}" is not one of this session's modes: ${s.modes.map((m) => m.id).join(', ')}.` };
+  }
+  try {
+    await s.conn.request('session/set_mode', { sessionId: s.sessionId, modeId: mode });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+}
+
 /** What the controls show: the mode, the modes on offer, the model, the slash commands. */
 export function getSessionInfo(agentId: string) {
   const s = sessions.get(agentId);

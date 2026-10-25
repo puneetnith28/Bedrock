@@ -149,6 +149,14 @@ try {
   t(p4.stopReason === 'cancelled', 'a request whose gate cannot be raised is refused, not left hanging');
   lh.setPermissionHandlers(null);
 
+  // 6c. Controls: permission mode.
+  const toTrusted = await lh.setMode(agent.id, 'trusted');
+  t(toTrusted.ok && await waitFor(() => lh.getSessionInfo(agent.id)?.mode === 'trusted'), 'setMode switches the session mode');
+  const bogus = await lh.setMode(agent.id, 'yolo');
+  t(!bogus.ok && /not one of this session's modes/.test(bogus.error || ''), 'a mode the session did not offer is refused');
+  await lh.setMode(agent.id, 'guarded');
+  t((await lh.setMode('no-such-agent', 'auto')).ok === false, 'setMode on a stopped agent says so');
+
   // 7. The Supervisor's text view.
   const seen = [];
   const off = lh.subscribeText(agent.id, (txt) => seen.push(txt));

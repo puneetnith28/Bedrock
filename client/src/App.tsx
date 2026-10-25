@@ -4,6 +4,7 @@ import AgentGrid, { type GridLayout } from './components/AgentGrid';
 import SharedContentView from './components/SharedContent';
 import ActivityFeed from './components/ActivityFeed';
 import ProjectWiki from './components/ProjectWiki';
+import TeamPanel from './components/TeamPanel';
 import MessagesPanel from './components/MessagesPanel';
 import GroupChat from './components/GroupChat';
 import CommandPalette from './components/CommandPalette';
@@ -32,7 +33,7 @@ import { speak, stopSpeaking } from './utils/speech';
 import type { Route, RosterAgent } from './utils/voiceRouting';
 import type { Project, Agent, Plan, PendingGate } from './api';
 
-type MainTab = 'terminals' | 'messages' | 'groupchat' | 'shared' | 'wiki' | 'activity' | 'usage';
+type MainTab = 'terminals' | 'messages' | 'groupchat' | 'shared' | 'wiki' | 'team' | 'activity' | 'usage';
 
 const LAYOUT_ICONS: { v: GridLayout; Icon: (p: { size?: number }) => JSX.Element; title: string }[] = [
   { v: 'single', Icon: Ic.single, title: 'Single' },
@@ -1289,6 +1290,13 @@ export default function App() {
                   <Ic.book size={12} /> Wiki
                 </button>
                 <button
+                  className={'gr-tab' + (mainTab === 'team' ? ' active' : '')}
+                  onClick={() => setMainTab('team')}
+                  title="Project memory, skills, agent definitions and plugins"
+                >
+                  <Ic.hash size={12} /> Team
+                </button>
+                <button
                   className={'gr-tab' + (mainTab === 'activity' ? ' active' : '')}
                   onClick={() => setMainTab('activity')}
                 >
@@ -1374,6 +1382,7 @@ export default function App() {
               <SharedContentView key={selectedProjectId} projectId={selectedProjectId} refreshTrigger={contentRefresh} />
             )}
             {mainTab === 'wiki' && <ProjectWiki key={selectedProjectId} projectId={selectedProjectId} />}
+            {mainTab === 'team' && <TeamPanel key={selectedProjectId} projectId={selectedProjectId} ws={ws} />}
             {mainTab === 'activity' && <ActivityFeed key={selectedProjectId} projectId={selectedProjectId} ws={ws} />}
             {mainTab === 'usage' && <UsagePanel />}
             </div>

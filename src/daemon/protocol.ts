@@ -121,7 +121,9 @@ export type DaemonRpcRequest =
   | { id: string; op: 'agent:replay'; agentId: string }
   | { id: string; op: 'brain:state' }
   | { id: string; op: 'supervisor:health' }
-  | { id: string; op: 'codex:models' };
+  | { id: string; op: 'codex:models' }
+  | { id: string; op: 'localharness:info'; agentId: string }
+  | { id: string; op: 'localharness:setMode'; agentId: string; mode: string };
 
 // --- Fire-and-forget commands ---
 export type DaemonCommand =
@@ -161,6 +163,8 @@ export type DaemonRpcParams = {
   'brain:state'?: Record<string, never>;
   'supervisor:health'?: Record<string, never>;
   'codex:models'?: Record<string, never>;
+  'localharness:info': { agentId: string };
+  'localharness:setMode': { agentId: string; mode: string };
 };
 
 /** Daemon → Web. */
@@ -226,4 +230,16 @@ export interface DaemonRpcResults {
   'brain:state': BrainState;
   'supervisor:health': SupervisorHealth;
   'codex:models': { models: string[] };
+  'localharness:info': { info: LocalHarnessSessionInfo | null };
+  'localharness:setMode': { ok: boolean; error?: string };
+}
+
+/** A LocalHarness ACP session's controls, for the UI. */
+export interface LocalHarnessSessionInfo {
+  mode: string;
+  modes: Array<{ id: string; name: string; description?: string }>;
+  model: string;
+  commands: Array<{ name: string; description?: string }>;
+  busy: boolean;
+  queued: number;
 }

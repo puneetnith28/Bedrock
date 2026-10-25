@@ -233,6 +233,7 @@ function AgentPane({
               onFocus={onFocus}
               focused={focused}
               variant={agent.cli === 'codex' ? 'codex' : 'localharness'}
+              projectId={agent.projectId}
             />
           ) : (
             <Terminal

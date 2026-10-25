@@ -25,6 +25,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Ic from './Icons';
 import { renderMarkdown } from '../utils/md';
 import type { WsApi } from '../hooks/useWebSocket';
+import * as api from '../api';
+import type { LocalHarnessInfo } from '../api';
 
 interface CodexItem {
   id: string;
@@ -56,12 +58,14 @@ interface Props {
    * its own messages.
    */
   variant?: 'codex' | 'localharness';
+  /** LocalHarness: the agent's project, for its controls. */
+  projectId?: string;
 }
 
 const MODEL_KEY = 'conduit:codex-model';
 const EFFORT_KEY = 'conduit:codex-effort';
 
-export default function CodexAgentView({ agentId, ws, onFocus, focused, variant = 'codex' }: Props) {
+export default function CodexAgentView({ agentId, ws, onFocus, focused, variant = 'codex', projectId }: Props) {
   const isCodex = variant === 'codex';
   const label = isCodex ? 'Codex' : 'LocalHarness';
   const [items, setItems] = useState<CodexItem[]>([]);
@@ -70,6 +74,8 @@ export default function CodexAgentView({ agentId, ws, onFocus, focused, variant 
   const [model, setModel] = useState(() => localStorage.getItem(MODEL_KEY) || '');
   const [effort, setEffort] = useState(() => localStorage.getItem(EFFORT_KEY) || '');
   const [models, setModels] = useState<string[]>([]);
+  const [lhInfo, setLhInfo] = useState<LocalHarnessInfo | null>(null);
+  const [lhError, setLhError] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -86,6 +92,18 @@ export default function CodexAgentView({ agentId, ws, onFocus, focused, variant 
       .catch(() => { /* picker just shows "default" */ });
     return () => { cancelled = true; };
   }, [isCodex]);
+
+  // LocalHarness: its mode, the modes on offer and its model, refreshed while shown.
+  useEffect(() => {
+    if (isCodex || !projectId) return;
+    let cancelled = false;
+    const refresh = () => api.getLocalHarnessInfo(projectId, agentId)
+      .then((i) => { if (!cancelled) setLhInfo(i); })
+      .catch(() => { /* daemon restarting — keep the last */ });
+    void refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [isCodex, projectId, agentId]);
 
   useEffect(() => {
     let attached = false;
@@ -151,6 +169,19 @@ export default function CodexAgentView({ agentId, ws, onFocus, focused, variant 
     ws.send({ type: 'localharness:cancel', agentId });
   };
 
+  // LocalHarness's own slash commands, sent as a prompt — the way Zed sends them.
+  const slash = (cmd: string) => { ws.send({ type: 'localharness:send', agentId, text: cmd }); };
+
+  const changeMode = async (mode: string) => {
+    if (!projectId) return;
+    if (mode === 'unattended' && !confirm('Unattended turns every question into a yes — no approval gates for this agent. Continue?')) return;
+    setLhError(null);
+    try {
+      await api.setLocalHarnessMode(projectId, agentId, mode);
+      setLhInfo((i) => (i ? { ...i, mode } : i));
+    } catch (err) { setLhError((err as Error).message); }
+  };
+
   const startNewThread = () => {
     if (!confirm('Start a new thread? The current conversation stays on disk but this view resets.')) return;
     setItems([]);
@@ -195,7 +226,29 @@ export default function CodexAgentView({ agentId, ws, onFocus, focused, variant 
         </div>
       ) : (
         <div className="cxv-toolbar">
-          <span className="cxv-select" style={{ border: 'none', opacity: 0.75 }}>LocalHarness · local model</span>
+          <span className="cxv-select" style={{ border: 'none', opacity: 0.75 }} title="Model on the local server">
+            {lhInfo?.model || 'local model'}
+          </span>
+          {lhInfo?.modes && lhInfo.modes.length > 0 && (
+            <select
+              className="cxv-select"
+              value={lhInfo.mode || ''}
+              onChange={(e) => void changeMode(e.target.value)}
+              title={lhInfo.modes.find((m) => m.id === lhInfo.mode)?.description || 'Permission mode'}
+              aria-label="Permission mode"
+            >
+              {lhInfo.modes.map((m) => <option key={m.id} value={m.id} title={m.description}>Mode: {m.name}</option>)}
+            </select>
+          )}
+          <select className="cxv-select" value="" onChange={(e) => { if (e.target.value) slash('/effort ' + e.target.value); }} title="Reasoning effort (/effort)" aria-label="Reasoning effort">
+            <option value="">Effort…</option>
+            <option value="off">off</option>
+            <option value="low">low</option>
+            <option value="high">high</option>
+            <option value="max">max</option>
+          </select>
+          <button className="cxv-newthread" onClick={() => slash('/pending')} title="List decisions LocalHarness parked (/pending)">Pending</button>
+          {lhError && <span style={{ color: 'var(--danger, #d33)', fontSize: 12 }}>{lhError}</span>}
           <div className="cxv-toolbar-sp" />
           <button className="cxv-newthread" onClick={stopTurn} disabled={!working} title="Cancel the running turn">
             Stop

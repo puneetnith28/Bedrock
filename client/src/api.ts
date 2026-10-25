@@ -205,3 +205,37 @@ export async function safeReadApiResponse(res: Response): Promise<unknown> {
   const raw = await res.text();
   try { return JSON.parse(raw); } catch { return { error: raw }; }
 }
+
+// --- Skills, project memory, agent definitions, plugins, LocalHarness controls ---
+
+export interface Skill { name: string; description: string; path: string; scope: 'project' | 'user' }
+export interface MemoryFact { id: string; text: string; source: string; createdAt: string }
+export interface AgentTemplate { file: string; name: string; cli: string; role?: string; cwd: string; terminal?: boolean; exists: boolean }
+export interface PluginInfo { name: string; enabled: boolean; loaded: boolean; error?: string }
+export interface LocalHarnessInfo {
+  running: boolean;
+  mode?: string;
+  modes?: Array<{ id: string; name: string; description?: string }>;
+  model?: string;
+  busy?: boolean;
+  queued?: number;
+}
+
+export const listSkills = (projectId: string) => request<Skill[]>(`/projects/${projectId}/skills`);
+export const listMemory = (projectId: string, q = '') =>
+  request<MemoryFact[]>(`/projects/${projectId}/memory${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+export const addMemory = (projectId: string, text: string) =>
+  request<MemoryFact>(`/projects/${projectId}/memory`, { method: 'POST', body: JSON.stringify({ text }) });
+export const forgetMemory = (projectId: string, factId: string) =>
+  request<void>(`/projects/${projectId}/memory/${factId}`, { method: 'DELETE' });
+export const listAgentTemplates = (projectId: string) =>
+  request<{ templates: AgentTemplate[]; problems: Array<{ file: string; error: string }> }>(`/projects/${projectId}/agent-templates`);
+export const importAgentTemplates = (projectId: string) =>
+  request<{ created: Agent[]; skipped: string[]; problems: Array<{ file: string; error: string }> }>(`/projects/${projectId}/agent-templates/import`, { method: 'POST' });
+export const listPlugins = () => request<{ apiVersion: string; dir: string; plugins: PluginInfo[] }>('/plugins');
+export const setPluginEnabled = (name: string, enabled: boolean) =>
+  request<{ enabled: string[] }>(`/plugins/${encodeURIComponent(name)}`, { method: 'PUT', body: JSON.stringify({ enabled }) });
+export const getLocalHarnessInfo = (projectId: string, agentId: string) =>
+  request<LocalHarnessInfo>(`/projects/${projectId}/agents/${agentId}/localharness`);
+export const setLocalHarnessMode = (projectId: string, agentId: string, mode: string) =>
+  request<{ ok: boolean }>(`/projects/${projectId}/agents/${agentId}/localharness/mode`, { method: 'POST', body: JSON.stringify({ mode }) });
