@@ -576,3 +576,13 @@ export function isAgentRunning(agentId: string): boolean {
 export function getRunningAgentIds(): string[] {
   return Array.from(sessions.keys());
 }
+
+export function killProcessGroup(pid: number, signal: NodeJS.Signals = 'SIGTERM'): void {
+  try {
+    if (process.platform !== 'win32') {
+      process.kill(-pid, signal);
+    } else {
+      process.kill(pid, signal);
+    }
+  } catch {}
+}
