@@ -66,8 +66,12 @@ function buildModel(
       modelId: modelOverride || s.model,
       maxTokens: 512,
       temperature: 0.2,
-      // The OpenAI client insists on a key; local servers ignore it.
-      clientConfig: { baseURL: s.baseUrl, apiKey: s.apiKey === 'none' ? 'local' : s.apiKey },
+      // A key is required, and it must be the top-level option: OpenAIModel
+      // ignores clientConfig.apiKey and otherwise falls back to OPENAI_API_KEY
+      // — which would send a real OpenAI key to the local server, or fail
+      // where none is set. Local servers ignore the value.
+      apiKey: s.apiKey === 'none' ? 'local' : s.apiKey,
+      clientConfig: { baseURL: s.baseUrl },
     });
   }
   if (backend === 'anthropic') {
