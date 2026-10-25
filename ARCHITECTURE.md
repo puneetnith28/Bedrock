@@ -536,3 +536,27 @@ and exits non-zero.
 | Packaged app | `npm run check:desktop` | Own daemon, all agent types, Bedrock parity, no orphans | 31 / 31 |
 | Bedrock | `npm run check:bedrock` | Distinguishes IAM, entitlement and quota failures | Diagnostic |
 | Types | `npm run typecheck` | Strict TypeScript, client and server | 0 errors |
+
+
+## Approval Gate Lifecycle Sequence
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Agent as Agent PTY
+  participant Watcher as Strands Watcher
+  participant Supervisor as Claude / Bedrock
+  participant Client as Web Client
+  
+  Agent->>Watcher: Emit stdout chunk
+  Watcher->>Watcher: Fast-path regex check
+  alt Fast-Path Trigger
+    Watcher->>Client: Send Gate Modal Prompt
+  else Fallback Classifier
+    Watcher->>Supervisor: Classify risk
+    Supervisor-->>Watcher: Gate required
+    Watcher->>Client: Send Gate Modal Prompt
+  end
+  Client->>Watcher: User Approve / Deny
+  Watcher->>Agent: Inject newline / SIGINT
+```
