@@ -106,5 +106,16 @@ t(!checkGate('rm -r node_modules && npm install').matches, 'rm -r without -f is 
     'and high risk is what keeps it away from the auto-answer path');
 }
 
+// LocalHarness in terminal mode: its permission menu and trust question gate,
+// even with the spaces drawn as cursor moves.
+{
+  const legend = ' [y]es once   [a]lways here   [n]o   [N]ever here ';
+  t(checkGate('Permission needed: bash `make test`\n' + legend).matches, "LocalHarness's permission menu is a prompt gate");
+  t(checkGate('[y]esonce[a]lwayshere[n]o[N]everhere').matches, 'and still is with its spaces drawn as cursor moves');
+  t(checkGate(' [y]es once   [n]o     (asks every time — cannot be remembered) ').matches, 'the ungrantable form gates too');
+  t(checkGate(' [y]es, trust it   [n]o, ask me (guarded) ').matches, 'its workspace trust question gates');
+  t(!checkGate('Say [y]es or [n]o when you are ready.').matches, 'prose with bracketed letters does not gate');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

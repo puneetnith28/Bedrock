@@ -11,7 +11,9 @@
  * `rm -rf` on a command line is.
  */
 
-import { isAnswerable } from './gate-answer.js';
+import {
+  isAnswerable, isLocalHarnessQuestion, LOCALHARNESS_PERMISSION, LOCALHARNESS_TRUST,
+} from './gate-answer.js';
 import type { GateSource } from './types.js';
 
 export const COMMON_GATE_PATTERNS = [
@@ -43,6 +45,11 @@ export const COMMON_GATE_PATTERNS = [
   // "Yes,Itrustthisfolder", with no spaces at all.
   /trust\s*this\s*folder/i,
   /Is\s*this\s*a\s*project\s*you\s*created\s*or\s*one\s*you\s*trust/i,
+  // LocalHarness in terminal mode: its permission menu and its workspace trust
+  // question (see gate-answer.ts). Without these a terminal LocalHarness agent
+  // waits on a keypress no gate ever announces.
+  LOCALHARNESS_PERMISSION,
+  LOCALHARNESS_TRUST,
 ];
 
 export const HIGH_RISK_KEYWORDS = [
@@ -120,6 +127,10 @@ export function classifyGate(prompt: string, source: GateSource): GateRisk {
   //                "answered" it by typing y into the agent's composer.
   if (source !== 'regex') return 'harmful';
   if (checkGate(prompt).highRisk) return 'harmful';
+  // LocalHarness's own permission gate asks only when its policy says a person
+  // must decide. Answerable, but answering it automatically would switch that
+  // gate off — so a human it is.
+  if (isLocalHarnessQuestion(prompt)) return 'harmful';
 
   // Routine means two things at once, and it used to mean only the first:
   //

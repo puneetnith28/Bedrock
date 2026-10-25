@@ -76,7 +76,41 @@ export function isTrustPrompt(text: string): boolean {
   return TRUST.test(text);
 }
 
+/**
+ * LocalHarness's permission question in its terminal REPL (terminal mode):
+ *
+ *   Permission needed …
+ *    [y]es once   [a]lways here   [n]o   [N]ever here
+ *    [y]es once   [n]o     (asks every time — cannot be remembered)
+ *
+ * and its first-run workspace trust question:
+ *
+ *    [y]es, trust it   [n]o, ask me (guarded)
+ *
+ * Both are one-keystroke menus (localharness/channels/terminal.py,
+ * cli/session_trust.py): a bare key answers, Enter would mean "no". Spaces
+ * are optional for the same reason as above.
+ */
+export const LOCALHARNESS_PERMISSION = /\[y\]es\s*once\s*(?:\[a\]lways\s*here\s*)?\[n\]o/i;
+export const LOCALHARNESS_TRUST = /\[y\]es,\s*trust\s*it\s*\[n\]o/i;
+
+/** One of LocalHarness's own gate questions — always a human's decision. */
+export function isLocalHarnessQuestion(text: string): boolean {
+  return LOCALHARNESS_PERMISSION.test(text) || LOCALHARNESS_TRUST.test(text);
+}
+
 export function answerFor(prompt: string): GateAnswer | null {
+  if (isLocalHarnessQuestion(prompt)) {
+    // A single key, no Enter: the menu binds `y` and `n` eagerly, and Enter
+    // is its "no". The lead-in is the trust-prompt lesson below — keys sent
+    // while the menu is still drawing land nowhere.
+    return {
+      approve: [{ data: 'y', delayMs: 300 }],
+      reject: [{ data: 'n', delayMs: 300 }],
+      describe: LOCALHARNESS_TRUST.test(prompt) ? 'trusted the workspace' : 'allowed it once',
+    };
+  }
+
   if (TRUST.test(prompt)) {
     // An arrow menu whose highlighted row is "No, exit" — so a `y` does
     // nothing and a bare Enter quits the agent. Down moves the marker to
