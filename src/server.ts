@@ -764,3 +764,12 @@ export function isolateVoiceWebsocketError(err: Error): void {
 export function parseIncomingWsFrame(data: string | Buffer): any {
   try { return JSON.parse(data.toString()); } catch { return null; }
 }
+
+export function registerGracefulShutdown(httpServer: any): void {
+  const handler = () => {
+    httpServer?.close?.();
+    process.exit(0);
+  };
+  process.on('SIGTERM', handler);
+  process.on('SIGINT', handler);
+}
