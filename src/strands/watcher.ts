@@ -32,6 +32,7 @@ import { checkGate, stripAnsi, gateQuestion } from '../gatePatterns.js';
 import { shouldAutoApprove } from '../gate-policy.js';
 import type { DaemonMessage } from '../daemon/protocol.js';
 import type { GateOption, GateSource } from '../types.js';
+import { listLocalModels, localLlmSettings, pickModel } from '../local-llm.js';
 import {
   anthropicCandidates,
   classifyWithAnthropic,
@@ -247,7 +248,9 @@ let supervisorFailures = 0;
  * thing you look at to find out whether the problem is real.
  */
 let lastOkAt = 0;
-let lastOkProvider: 'bedrock' | 'anthropic' | null = null;
+let lastOkProvider: 'bedrock' | 'anthropic' | 'local' | null = null;
+/** The local model the last local classification ran on. */
+let lastLocalModel = '';
 /**
  * Did the last good classification go through the Strands SDK?
  *
@@ -264,7 +267,7 @@ export interface SupervisorHealth {
   /** off = disabled by config; ok = classifying; degraded = on the fallback;
    *  failing = tried and could not; idle = nothing classified yet. */
   state: 'off' | 'ok' | 'degraded' | 'failing' | 'idle';
-  provider: 'bedrock' | 'anthropic' | null;
+  provider: 'bedrock' | 'anthropic' | 'local' | null;
   configured: string;
   model: string;
   /** Whether the last good classification ran through the Strands SDK. */
@@ -289,13 +292,16 @@ export function supervisorHealth(): SupervisorHealth {
     : !lastOkAt ? 'idle'
       // Working, but not on the backend that was asked for. Worth surfacing:
       // the fallback is slower, billed elsewhere, and silent until you look.
-      : lastOkProvider === 'anthropic' && supervisorProvider() !== 'anthropic' ? 'degraded'
+      : (lastOkProvider === 'anthropic' && supervisorProvider() !== 'anthropic')
+        || (lastOkProvider === 'local' && supervisorProvider() !== 'local') ? 'degraded'
         : supervisorFailures > 0 ? 'failing' : 'ok';
   return {
     state,
     provider: lastOkProvider,
     configured: supervisorProvider(),
-    model: lastOkProvider === 'anthropic' ? currentModel() : BEDROCK_MODEL_ID,
+    model: lastOkProvider === 'anthropic' ? currentModel()
+      : lastOkProvider === 'local' ? lastLocalModel
+        : BEDROCK_MODEL_ID,
     strands: lastOkViaStrands,
     lastOkAt: lastOkAt || null,
     lastError,
@@ -389,6 +395,20 @@ async function runAsStrandsAgent(
     return;
   }
 
+  if (backend === 'local') {
+    // The configured model, else the first the server serves. The probe is
+    // cached, so this costs one request every ten seconds at most.
+    const settings = localLlmSettings();
+    const probe = await listLocalModels(settings);
+    const model = pickModel(settings, probe);
+    if (!model) throw new Error(probe.ok ? `The local model server at ${settings.baseUrl} serves no model.` : probe.error);
+    await createSupervisorAgent(onUpdate, 'local', model).invoke(prompt);
+    lastOkProvider = 'local';
+    lastLocalModel = model;
+    lastOkViaStrands = true;
+    return;
+  }
+
   // Walk the same ladder the raw path walks, rather than giving up on the SDK
   // because the top rung was rate limited.
   let lastErr: unknown = null;
@@ -443,23 +463,47 @@ async function classify(prompt: string, onUpdate: (u: SupervisorUpdate) => void)
     await runAsStrandsAgent('anthropic', prompt, onUpdate);
     return;
   }
+  if (provider === 'local') {
+    await runAsStrandsAgent('local', prompt, onUpdate);
+    return;
+  }
 
+  // The local server is the last rung of `auto`, and only when it was set on
+  // purpose: the default URL is a guess, and a guess must not change what the
+  // Supervisor does on a machine that never asked for it.
+  const localRung = localLlmSettings().configured;
   try {
     await runAsStrandsAgent('bedrock', prompt, onUpdate);
   } catch (err) {
     const msg = describeError(err);
-    if (provider === 'bedrock' || !shouldFallBack(msg) || !hasAnthropicCredential()) throw err;
-    if (!fallbackAnnounced) {
-      fallbackAnnounced = true;
-      console.log(
-        `[watcher] Bedrock unavailable (${msg})\n`
-        + `          Still a Strands Agent — switching it to Anthropic on ${currentModel()}. `
-        + 'Fix Bedrock model access or quota to go back.',
-      );
+    if (provider === 'bedrock' || !shouldFallBack(msg)) throw err;
+    if (hasAnthropicCredential()) {
+      if (!fallbackAnnounced) {
+        fallbackAnnounced = true;
+        console.log(
+          `[watcher] Bedrock unavailable (${msg})\n`
+          + `          Still a Strands Agent — switching it to Anthropic on ${currentModel()}. `
+          + 'Fix Bedrock model access or quota to go back.',
+        );
+      }
+      try {
+        await runAsStrandsAgent('anthropic', prompt, onUpdate);
+        return;
+      } catch (err2) {
+        if (!localRung) throw err2;
+      }
+    } else if (!localRung) {
+      throw err;
     }
-    await runAsStrandsAgent('anthropic', prompt, onUpdate);
+    if (!localFallbackAnnounced) {
+      localFallbackAnnounced = true;
+      console.log('[watcher] No cloud provider available — still a Strands Agent, now on the local model server.');
+    }
+    await runAsStrandsAgent('local', prompt, onUpdate);
   }
 }
+
+let localFallbackAnnounced = false;
 
 async function processBuffer(state: WatcherState) {
   if (state.isProcessing || !state.buffer.trim()) return;
