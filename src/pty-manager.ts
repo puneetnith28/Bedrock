@@ -692,3 +692,5 @@ export function scheduleEscalatingSigkill(pid: number, delayMs: number = 2500): 
     try { process.kill(pid, 'SIGKILL'); } catch {}
   }, delayMs);
 }
+
+export const MAX_SCROLLBACK_LINES = 5000;
