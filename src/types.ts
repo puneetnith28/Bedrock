@@ -35,6 +35,9 @@ export interface Agent {
   flags?: {
     dangerouslySkipPermissions?: boolean;
     remoteControl?: boolean;
+    /** LocalHarness only: run the interactive REPL in a terminal instead of
+     *  the structured ACP session (the default). */
+    terminal?: boolean;
   };
   pendingGate?: {
     prompt: string;

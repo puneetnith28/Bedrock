@@ -64,7 +64,7 @@ export function getHubUrl(): string {
  * and inheriting it would make any Electron app the agent launches (VS Code,
  * say) boot headless as Node and appear to do nothing.
  */
-function agentEnv(): Record<string, string> {
+export function agentEnv(): Record<string, string> {
   const env = { ...process.env } as Record<string, string>;
   delete env.ELECTRON_RUN_AS_NODE;
   return env;
@@ -164,7 +164,7 @@ const MAX_BUFFER_CHARS = 512_000;
 /**
  * Ensure the shared content directory exists with a README.
  */
-function ensureSharedDir(projectName: string): string {
+export function ensureSharedDir(projectName: string): string {
   const sharedPath = sharedDirFor(projectName);
   fs.mkdirSync(sharedPath, { recursive: true });
   const readmePath = path.join(sharedPath, 'README.md');
@@ -261,7 +261,7 @@ function buildConduitSection(
 /**
  * Write Conduit instructions to a markdown file (CLAUDE.md or AGENTS.md).
  */
-function ensureInstructionFile(
+export function ensureInstructionFile(
   filePath: string,
   projectName: string,
   sharedPath: string,

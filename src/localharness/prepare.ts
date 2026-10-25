@@ -20,6 +20,8 @@ export interface PreparedLocalHarness {
   model: string;
   /** The resolved executable, and whether it needs a shell (a .cmd shim). */
   binary: string;
+  /** Arguments before the subcommand — empty except under test. */
+  binaryArgs: string[];
   shell: boolean;
   /** Whether Bedrock's MCP server is attached (false when it is not built). */
   mcp: boolean;
@@ -73,5 +75,5 @@ export async function prepareLocalHarnessAgent(agent: Agent, deps: PrepareDeps =
   } catch (err) {
     throw new AgentStartError((err as Error).message);
   }
-  return { configDir, baseUrl: settings.baseUrl, model, binary, shell, mcp: !!mcp };
+  return { configDir, baseUrl: settings.baseUrl, model, binary, binaryArgs: deps.binaryArgs || [], shell, mcp: !!mcp };
 }

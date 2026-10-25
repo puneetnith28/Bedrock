@@ -16,6 +16,7 @@ import type { Agent } from '../types.js';
 import type { CodexItem } from './protocol.js';
 import { updateAgent, getProjectData, sharedDirFor, wikiDirFor } from '../storage.js';
 import { CodexAppServer } from './codex-server.js';
+import { textListener } from './item-text.js';
 
 type StatusFn = (agentId: string, status: string) => void;
 type ItemListener = (item: CodexItem) => void;
@@ -721,22 +722,7 @@ export function subscribeItems(agentId: string, listener: ItemListener): () => v
 export function subscribeText(agentId: string, listener: (text: string) => void): () => void {
   const s = sessions.get(agentId);
   if (!s) return () => { /* nothing */ };
-  const emitted = new Set<string>();
-  const l: ItemListener = (it) => {
-    if (it.status === 'running') return;
-    if (emitted.has(it.id)) return;
-    let text = '';
-    if (it.kind === 'message' && it.role === 'agent') text = it.text || '';
-    else if (it.kind === 'command') {
-      const out = (it.output || '').slice(-2000);
-      text = `$ ${it.command || ''}\n${out}\n(exit ${it.exitCode ?? '?'})`;
-    } else if (it.kind === 'error') text = 'ERROR: ' + (it.text || '');
-    else if (it.kind === 'file') text = `edited file: ${it.path || ''}`;
-    if (!text.trim()) return;
-    emitted.add(it.id);
-    if (emitted.size > 2000) emitted.clear();
-    listener(text + '\n');
-  };
+  const l: ItemListener = textListener(listener);
   s.listeners.add(l);
   return () => { sessions.get(agentId)?.listeners.delete(l); };
 }
