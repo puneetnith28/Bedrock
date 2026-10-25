@@ -16,10 +16,17 @@ export interface GroupChatEntry {
 
 const BASE_DIR = path.join(os.homedir(), '.conduit');
 const PROJECTS_DIR = path.join(BASE_DIR, 'projects');
+import {
+  ensureDir,
+  writeFileAtomic,
+  writeJsonAtomic,
+  readJsonSync,
+  appendJsonlSync,
+  safeProjectName,
+  resolveInside,
+} from './storage-fs.js';
 
-function ensureDir(dir: string) {
-  fs.mkdirSync(dir, { recursive: true });
-}
+export { safeProjectName, resolveInside };
 
 /** Only accept UUID-shaped project ids in filesystem paths. */
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -36,43 +43,6 @@ function projectFile(projectId: string) {
 const SHARED_CONTENT_DIR = path.join(BASE_DIR, 'shared_content');
 const WIKI_DIR = path.join(BASE_DIR, 'wiki');
 
-/**
- * Project names double as directory names under shared_content/ and wiki/.
- * Strip anything that could escape or break a path: separators, `..`, control
- * chars, and leading dots. Falls back to "project" when nothing is left.
- */
-export function safeProjectName(name: string): string {
-  const cleaned = name
-    .replace(/[\\/:*?"<>|\x00-\x1f]/g, '')
-    .replace(/\.\.+/g, '.')
-    .replace(/^\.+/, '')
-    .trim();
-  return cleaned || 'project';
-}
-
-/**
- * Resolve `rel` inside `base` and reject anything that escapes it (path
- * traversal). Returns null when the path is not safely inside `base`.
- */
-export function resolveInside(base: string, rel: string): string | null {
-  if (typeof rel !== 'string' || rel.length === 0 || rel.length > 512) return null;
-  if (rel.includes('\0')) return null;
-  const normalized = rel.replace(/\\/g, '/');
-  if (path.isAbsolute(normalized) || /^[A-Za-z]:/.test(normalized)) return null;
-  // No single name may exceed the filesystem's limit, and on Windows the whole
-  // path is limited too unless long paths are enabled. Rejecting here turns
-  // "400 Invalid filename" into the answer, instead of an ENOENT thrown from
-  // deep inside a write and surfaced to the user as a 500.
-  if (normalized.split('/').some((seg) => seg.length > 255)) return null;
-
-  const full = path.resolve(base, normalized);
-  const root = path.resolve(base);
-  if (full === root) return null;
-  const relBack = path.relative(root, full);
-  if (relBack.startsWith('..') || path.isAbsolute(relBack)) return null;
-  if (process.platform === 'win32' && full.length > 250) return null;
-  return full;
-}
 
 function sharedDir(projectName: string) {
   return path.join(SHARED_CONTENT_DIR, safeProjectName(projectName));
@@ -238,68 +208,6 @@ export function getProjectData(projectId: string): ProjectData | null {
  * read-modify-write safe: two processes updating different fields at the same
  * instant can still lose one update. That needs a lock, and is worth doing if
  * it is ever observed.
- */
-let tmpCounter = 0;
-
-/**
- * Sleep without spinning, from synchronous code.
- *
- * The storage API is synchronous, so a retry cannot await. Busy-waiting is the
- * obvious alternative and the wrong one here: it burns a core and starves the
- * other process — which, when the contention *is* that other process, makes
- * the thing being waited for take longer. Atomics.wait blocks the thread
- * properly.
- */
-function sleepSync(ms: number): void {
-  if (ms <= 0) return;
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
-
-/**
- * Windows refuses to rename over a file another process has open, with EPERM.
- * Both processes read and write project.json, so this happens in ordinary use
- * — reproducible in one line: hold the target open, rename onto it.
- *
- * Measured under four processes writing while a reader held the file: with no
- * retry, 190 of 480 writes were lost. Each loss is an approval gate that was
- * never recorded or an agent status left stale, so the ladder is deliberately
- * patient — roughly a second in total, which is imperceptible for a write that
- * normally takes under a millisecond, and only ever paid under contention.
- *
- * A cross-process lock file was tried here and measured *worse* — 12 losses
- * became 51 — because it serialises writers while the EPERM comes from the
- * reader, so it added contention without removing the cause. Retrying the
- * rename is the thing that works.
- */
-function renameWithRetry(tmp: string, file: string): void {
-  const delays = [0, 2, 5, 10, 20, 40, 80, 150, 250, 400];
-  for (let i = 0; i < delays.length; i++) {
-    try {
-      fs.renameSync(tmp, file);
-      return;
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException)?.code;
-      const contended = code === 'EPERM' || code === 'EACCES' || code === 'EBUSY';
-      if (!contended || i === delays.length - 1) throw err;
-      sleepSync(delays[i + 1]);
-    }
-  }
-}
-
-function writeFileAtomic(file: string, contents: string): void {
-  const tmp = `${file}.${process.pid}.${Date.now().toString(36)}.${tmpCounter++}.tmp`;
-  try {
-    fs.writeFileSync(tmp, contents, 'utf-8');
-    renameWithRetry(tmp, file);
-  } catch (err) {
-    // Never leave the temporary behind — they accumulate in the project
-    // directory and are indistinguishable from real state.
-    try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch { /* best effort */ }
-    // Deliberately rethrown. A silently dropped write is a lost approval gate
-    // or a stale agent status, and the caller can at least log it.
-    throw err;
-  }
-}
 
 /**
  * Read, change and save one project's file without another process losing the
@@ -548,14 +456,14 @@ export function createAgent(projectId: string, name: string, cli: Agent['cli'], 
   });
 }
 
-export type AgentUpdate = Partial<Pick<Agent, 'name' | 'role' | 'cli' | 'cwd' | 'status' | 'pid' | 'flags' | 'codexThreadId' | 'pendingGate'>>;
+export type AgentUpdate = Partial<Pick<Agent, 'name' | 'role' | 'cli' | 'cwd' | 'status' | 'pid' | 'flags' | 'codexThreadId' | 'pendingGate' | 'lastExitCode' | 'lastExitSignal'>>;
 
 export function updateAgent(projectId: string, agentId: string, updates: AgentUpdate): Agent | null {
   return mutateProjectData(projectId, (data) => {
   const agent = data.agents.find(a => a.id === agentId);
   if (!agent) return null;
   // Only known fields — never let a request body add arbitrary keys.
-  const allowed: (keyof AgentUpdate)[] = ['name', 'role', 'cli', 'cwd', 'status', 'pid', 'flags', 'codexThreadId', 'pendingGate'];
+  const allowed: (keyof AgentUpdate)[] = ['name', 'role', 'cli', 'cwd', 'status', 'pid', 'flags', 'codexThreadId', 'pendingGate', 'lastExitCode', 'lastExitSignal'];
   const target = agent as unknown as Record<string, unknown>;
   for (const k of allowed) {
     if (k in updates) {
@@ -794,7 +702,7 @@ export function appendGroupChat(projectId: string, entry: GroupChatEntry): boole
   const dir = projectDir(projectId);
   ensureDir(dir);
   const file = path.join(dir, 'groupchat.jsonl');
-  fs.appendFileSync(file, JSON.stringify(entry) + '\n', 'utf-8');
+  appendJsonlSync(file, entry);
   return true;
 }
 
@@ -805,7 +713,7 @@ export function appendAuditLog(projectId: string, entry: Record<string, unknown>
   const dir = projectDir(projectId);
   ensureDir(dir);
   const file = path.join(dir, 'audit.jsonl');
-  fs.appendFileSync(file, JSON.stringify({ ...entry, timestamp: new Date().toISOString() }) + '\n', 'utf-8');
+  appendJsonlSync(file, { ...entry, timestamp: new Date().toISOString() });
   return true;
 }
 
@@ -1122,17 +1030,3 @@ export function updateWikiFile(projectId: string, filename: string, content: str
 }
 
 export { SHARED_CONTENT_DIR, WIKI_DIR };
-
-const WINDOWS_RESERVED_NAMES = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
-export function isWindowsReservedName(baseName: string): boolean {
-  return WINDOWS_RESERVED_NAMES.test(baseName.split('.')[0]);
-}
-
-export class ProjectFileMutex {
-  private queue = Promise.resolve();
-  acquire<T>(fn: () => Promise<T>): Promise<T> {
-    const res = this.queue.then(fn);
-    this.queue = res.then(() => {}, () => {});
-    return res;
-  }
-}

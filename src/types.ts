@@ -41,6 +41,8 @@ export interface Agent {
     source: 'regex' | 'supervisor';
     options?: string[];
   };
+  lastExitCode?: number | null;
+  lastExitSignal?: string | null;
 }
 
 export interface SharedContent {
@@ -138,17 +140,3 @@ export type WSServerMessage =
   | { type: 'plan:created'; plan: Plan }
   | { type: 'plan:resolved'; planId: string; decision: string }
   | { type: 'layout:changed'; projectId: string; layout: ProjectLayout };
-
-export type WSClientMessage =
-  | { type: 'subscribe'; channel: string; agentId?: string }
-  | { type: 'unsubscribe'; channel: string; agentId?: string }
-  | { type: 'ping'; timestamp: number }
-  | { type: 'terminal_input'; agentId: string; data: string };
-
-export type WSServerMessage =
-  | { type: 'state'; data: unknown }
-  | { type: 'terminal_output'; agentId: string; data: string }
-  | { type: 'pong'; timestamp: number }
-  | { type: 'error'; code: string; message: string };
-
-export type WebSocketErrorCode = 'BAD_PAYLOAD' | 'UNAUTHORIZED' | 'AGENT_NOT_FOUND' | 'INTERNAL_ERROR';
