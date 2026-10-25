@@ -37,14 +37,14 @@ Neither file is committed; `.env` is gitignored and `~/.conduit/` is outside the
 | Variable | Default | Does |
 |---|---|---|
 | `CONDUIT_SUPERVISOR` | `on` | `off`, `0` or `false` disables classification entirely |
-| `SUPERVISOR_PROVIDER` | `auto` | `bedrock`, `anthropic`, or `auto` — Bedrock first, Anthropic when it cannot serve |
+| `SUPERVISOR_PROVIDER` | `auto` | `bedrock`, `anthropic`, `local`, or `auto` — Bedrock first, Anthropic when it cannot serve, then the local server if `LOCAL_LLM_BASE_URL` is set. Also settable in Settings → Local model |
 | `AWS_REGION` | `us-east-1` | |
 | `BEDROCK_MODEL_ID` | `us.anthropic.claude-sonnet-4-5-20250929-v1:0` | **Must be an inference profile**, not a bare `anthropic.*` id — those are retired. Must match your IAM policy |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | *(none)* | Omit on EC2 with an instance role |
 | `ANTHROPIC_API_KEY` | *(none)* | The fallback provider. Without it, Bedrock falls back to the Claude Code OAuth token on this machine |
 | `ANTHROPIC_MODEL_ID` | *(ladder)* | Pins one model. Otherwise it walks `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` and keeps the first that answers |
 
-Both providers run through the Strands SDK. See [Architecture §3a](../ARCHITECTURE.md).
+All three providers run through the Strands SDK (`local` uses its `OpenAIModel`). See [Architecture §3a](../ARCHITECTURE.md).
 
 `npm run check:bedrock` tells the three Bedrock failure modes apart: a missing IAM
 permission, a model the account never enabled, and a quota cap. They all surface as
@@ -58,6 +58,18 @@ permission, a model the account never enabled, and a quota cap. They all surface
 | `OPENROUTER_API_KEY` | The `nemotron` agent |
 | `OPENAI_API_KEY` | OpenAI voice |
 | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Gemini voice |
+
+## Local model server
+
+Used by `localharness` agents, `SUPERVISOR_PROVIDER=local` and the LocalHarness Keeper engine.
+Also settable in Settings → Local model (saved to `~/.conduit/settings.json`); an environment
+variable wins.
+
+| Variable | Default | Does |
+|---|---|---|
+| `LOCAL_LLM_BASE_URL` | `http://127.0.0.1:11434/v1` (Ollama) | Any OpenAI-compatible server; `/v1` is added to a bare host |
+| `LOCAL_LLM_MODEL` | the first model the server lists | |
+| `LOCAL_LLM_API_KEY` | none | Most local servers take none |
 
 Claude Code, Codex, Gemini CLI and OpenCode use **their own logins**, not these keys —
 `claude login`, `codex login`, and so on. Bedrock never handles those credentials.
@@ -78,7 +90,7 @@ Voice provider keys live in `~/.conduit/api-keys.json`, not in `.env`, and
 
 | Variable | Default | Does |
 |---|---|---|
-| `CONDUIT_KEEPER_ENGINE` | auto | `codex` or `claude` — which CLI backs the Keeper |
+| `CONDUIT_KEEPER_ENGINE` | auto | `codex`, `claude` or `localharness` — which CLI backs the Keeper. Auto picks LocalHarness only when neither other CLI is installed |
 | `CONDUIT_AUTO_APPROVE` | *(unset)* | Auto-approve routine gates. Also settable at `PUT /api/gate-settings` |
 
 ## Set by Bedrock, not by you
