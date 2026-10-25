@@ -45,3 +45,8 @@ export function userEnvPath(): string {
 }
 
 loadEnv();
+
+export function parsePortWithBounds(raw: unknown, defaultPort: number): number {
+  const p = Number(raw);
+  return Number.isInteger(p) && p >= 1024 && p <= 65535 ? p : defaultPort;
+}
