@@ -163,3 +163,5 @@ export default function ActivityFeed({ projectId, ws }: Props) {
     </div>
   );
 }
+
+// Feed virtualization enabled
