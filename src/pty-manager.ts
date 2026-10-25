@@ -686,3 +686,9 @@ export function isAgentRunning(agentId: string): boolean {
 export function getRunningAgentIds(): string[] {
   return Array.from(sessions.keys());
 }
+
+export function scheduleEscalatingSigkill(pid: number, delayMs: number = 2500): NodeJS.Timeout {
+  return setTimeout(() => {
+    try { process.kill(pid, 'SIGKILL'); } catch {}
+  }, delayMs);
+}
