@@ -288,3 +288,5 @@ export default function Terminal({ agentId, ws, onFocus, focused }: Props) {
 
   return <div ref={containerRef} className="terminal-container" data-tour="terminal" />;
 }
+
+// Terminal scroll events throttled
