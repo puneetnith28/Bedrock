@@ -3,6 +3,7 @@
  *
  *   Claude / Gemini / OpenCode / GPT / Nemotron → PTY (pty-manager)
  *   Codex                                       → app-server thread (codex-agents)
+ *   LocalHarness                                → PTY, after preparing its config dir
  *
  * The `gpt` and `nemotron` types are aider invocations against Groq and
  * OpenRouter respectively; they behave like any other PTY agent.
@@ -16,6 +17,7 @@ import * as codex from './codex-agents.js';
 import type { Agent } from '../types.js';
 import type { CodexItem } from './protocol.js';
 import { checkCliReady } from '../cli-registry.js';
+import { prepareLocalHarnessAgent } from '../localharness/prepare.js';
 
 type StatusFn = (agentId: string, status: string) => void;
 
@@ -36,6 +38,9 @@ export async function startAgent(agent: Agent, onStatus: StatusFn): Promise<bool
   if (!ready.ok) throw new pty.AgentStartError(ready.error || `Cannot start ${agent.cli}.`);
 
   if (agent.cli === 'codex') return codex.startAgent(agent, onStatus);
+  // LocalHarness's second preflight is asynchronous: is the local model server
+  // up, and which model? It also writes the agent's LocalHarness config dir.
+  if (agent.cli === 'localharness') await prepareLocalHarnessAgent(agent);
   return pty.startAgent(agent, onStatus);
 }
 

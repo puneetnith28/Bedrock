@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { userEnvPath } from './env.js';
 
-export const CLI_IDS = ['claude', 'codex', 'gemini', 'opencode', 'gpt', 'nemotron'] as const;
+export const CLI_IDS = ['claude', 'codex', 'gemini', 'opencode', 'gpt', 'nemotron', 'localharness'] as const;
 
 export type CliId = (typeof CLI_IDS)[number];
 
@@ -65,6 +65,25 @@ export const CLI_SPECS: Record<CliId, CliSpec> = {
     install: 'uv tool install --python 3.12 aider-chat   (aider needs Python 3.10–3.12)',
     requiresEnv: ['OPENROUTER_API_KEY'],
   },
+  localharness: {
+    id: 'localharness',
+    label: 'LocalHarness (local model)',
+    binary: 'localharness',
+    // No API key: it runs on the local model server (see src/local-llm.ts),
+    // which the runtime checks before starting — that needs a network probe,
+    // so it cannot live in this synchronous check.
+    install: 'uv tool install localharness   (LocalHarness needs Python 3.12+)',
+  },
+};
+
+/**
+ * CLIs that are Python tools installed with uv. A missing one is diagnosed
+ * further — is uv there, is Python — because "not on PATH" alone does not say
+ * which of the three to install.
+ */
+const PYTHON_TOOLS: Record<string, string> = {
+  aider: 'uv tool install --python 3.12 aider-chat',
+  localharness: 'uv tool install localharness',
 };
 
 /** Valid `cli` values, for request validation. */
@@ -118,18 +137,23 @@ export function checkBinaryAvailability(cli: CliId): BinaryAvailability {
   }
 
   const binaryPath = findOnPath(spec.binary);
-  if (spec.binary === 'aider') {
+  const pythonInstall = PYTHON_TOOLS[spec.binary];
+  if (pythonInstall) {
     const hasUv = !!findOnPath('uv');
     const hasPython = !!(findOnPath('python3') || findOnPath('python'));
     const prereqs = { uv: hasUv, python: hasPython };
 
     if (!binaryPath) {
-      const hint = hasUv
-        ? 'uv is installed. Run: uv tool install --python 3.12 aider-chat'
-        : 'Install uv (https://astral.sh/uv) or Python 3.10-3.12, then run: uv tool install aider-chat';
+      const hint = spec.binary === 'aider'
+        ? (hasUv
+          ? 'uv is installed. Run: uv tool install --python 3.12 aider-chat'
+          : 'Install uv (https://astral.sh/uv) or Python 3.10-3.12, then run: uv tool install aider-chat')
+        : (hasUv
+          ? `uv is installed. Run: ${pythonInstall}`
+          : `Install uv (https://astral.sh/uv), then run: ${pythonInstall}`);
       return {
         available: false,
-        binary: 'aider',
+        binary: spec.binary,
         prerequisites: prereqs,
         hint,
       };
@@ -137,7 +161,7 @@ export function checkBinaryAvailability(cli: CliId): BinaryAvailability {
 
     return {
       available: true,
-      binary: 'aider',
+      binary: spec.binary,
       path: binaryPath,
       prerequisites: prereqs,
     };

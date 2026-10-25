@@ -9,6 +9,7 @@
  */
 import fs from 'fs';
 import path from 'path';
+import type { CliId } from './cli-registry.js';
 
 export const CONDUIT_MARKER = '<!-- Conduit -->';
 export const CONDUIT_END_MARKER = '<!-- End Conduit -->';
@@ -18,18 +19,52 @@ export const BEDROCK_END_MARKER = '<!-- End Bedrock -->';
 export const PRIMARY_MARKER = '<!-- BEDROCK_INSTRUCTIONS_START -->';
 export const PRIMARY_END_MARKER = '<!-- BEDROCK_INSTRUCTIONS_END -->';
 
-/** Which file each CLI reads its project instructions from. */
-export const INSTRUCTION_FILES: Record<string, string> = {
+/**
+ * Which file each CLI reads its project instructions from.
+ *
+ * Keyed by CliId, not string: a CLI added to the registry without an entry
+ * here is a compile error, rather than `path.join(cwd, undefined)` at start —
+ * which threw inside a catch that only logged, so the agent started knowing
+ * nothing about Bedrock.
+ */
+export const INSTRUCTION_FILES: Record<CliId, string> = {
   claude: 'CLAUDE.md',
   codex: 'AGENTS.md',
   gemini: 'AGENTS.md',
   opencode: 'AGENTS.md',
   gpt: 'AGENTS.md',
   nemotron: 'AGENTS.md',
+  // The default only — see instructionFileFor.
+  localharness: 'AGENTS.md',
 };
 
+/** LocalHarness's own instructions file, read when neither of the others exists. */
+const LOCALHARNESS_INSTRUCTIONS = path.join('.localharness', 'INSTRUCTIONS.md');
+
 /** Every file name Bedrock might have written into a project directory. */
-export const ALL_INSTRUCTION_FILES = [...new Set(Object.values(INSTRUCTION_FILES))];
+export const ALL_INSTRUCTION_FILES = [...new Set([...Object.values(INSTRUCTION_FILES), LOCALHARNESS_INSTRUCTIONS])];
+
+/**
+ * The instruction file this agent will actually read, in `cwd`.
+ *
+ * Fixed per CLI, except LocalHarness: it reads the FIRST of CLAUDE.md,
+ * AGENTS.md and .localharness/INSTRUCTIONS.md that exists
+ * (localharness/config/project_records.py). In a folder that already has a
+ * CLAUDE.md — another agent's, or the user's own — a section written to
+ * AGENTS.md would never be seen. And where only INSTRUCTIONS.md exists,
+ * creating an AGENTS.md would shadow the user's file, so the section goes
+ * into INSTRUCTIONS.md instead.
+ */
+export function instructionFileFor(cli: CliId, cwd: string): string {
+  if (cli === 'localharness') {
+    for (const name of ['CLAUDE.md', 'AGENTS.md', LOCALHARNESS_INSTRUCTIONS]) {
+      try {
+        if (fs.statSync(path.join(cwd, name)).isFile()) return name;
+      } catch { /* absent */ }
+    }
+  }
+  return INSTRUCTION_FILES[cli];
+}
 
 /**
  * Strip Bedrock's section (and older Conduit / AgentOrg ones) from a markdown file.

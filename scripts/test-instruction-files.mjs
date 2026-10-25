@@ -20,9 +20,13 @@ registerHooks({
 const {
   PRIMARY_MARKER,
   PRIMARY_END_MARKER,
+  INSTRUCTION_FILES,
+  ALL_INSTRUCTION_FILES,
+  instructionFileFor,
   stripConduitSection,
   removeConduitSections,
 } = await import('../src/instruction-files.ts');
+const { CLI_IDS } = await import('../src/cli-registry.ts');
 
 let pass = 0, fail = 0;
 function t(cond, name, extra) {
@@ -68,6 +72,36 @@ try {
   t(kept.includes('The user wrote this.') && !kept.includes(PRIMARY_MARKER), 'keeps the user file, minus our section');
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });
+}
+
+// 5. Every CLI has an instruction file.
+t(CLI_IDS.every((cli) => typeof INSTRUCTION_FILES[cli] === 'string'), 'every registered CLI has an instruction file');
+
+// 6. LocalHarness reads the first of CLAUDE.md, AGENTS.md, .localharness/INSTRUCTIONS.md.
+const lh = fs.mkdtempSync(path.join(os.tmpdir(), 'bedrock-lh-instr-'));
+try {
+  t(instructionFileFor('localharness', lh) === 'AGENTS.md', 'localharness defaults to AGENTS.md in an empty folder');
+  fs.mkdirSync(path.join(lh, '.localharness'));
+  fs.writeFileSync(path.join(lh, '.localharness', 'INSTRUCTIONS.md'), '# mine\n');
+  t(instructionFileFor('localharness', lh) === path.join('.localharness', 'INSTRUCTIONS.md'),
+    'with only INSTRUCTIONS.md, writes there instead of shadowing it with AGENTS.md');
+  fs.writeFileSync(path.join(lh, 'AGENTS.md'), '# agents\n');
+  t(instructionFileFor('localharness', lh) === 'AGENTS.md', 'AGENTS.md outranks INSTRUCTIONS.md');
+  fs.writeFileSync(path.join(lh, 'CLAUDE.md'), '# claude\n');
+  t(instructionFileFor('localharness', lh) === 'CLAUDE.md', 'CLAUDE.md outranks both, as LocalHarness reads it');
+  t(instructionFileFor('gemini', lh) === 'AGENTS.md' && instructionFileFor('claude', lh) === 'CLAUDE.md',
+    'other CLIs keep their fixed file regardless of what exists');
+  t(ALL_INSTRUCTION_FILES.includes(path.join('.localharness', 'INSTRUCTIONS.md')),
+    'removal also looks in .localharness/INSTRUCTIONS.md');
+  // The section is taken back out of INSTRUCTIONS.md and the user's text kept.
+  fs.rmSync(path.join(lh, 'CLAUDE.md'));
+  fs.rmSync(path.join(lh, 'AGENTS.md'));
+  fs.appendFileSync(path.join(lh, '.localharness', 'INSTRUCTIONS.md'), section);
+  removeConduitSections(lh, 'Demo');
+  const after = fs.readFileSync(path.join(lh, '.localharness', 'INSTRUCTIONS.md'), 'utf-8');
+  t(after.includes('# mine') && !after.includes(PRIMARY_MARKER), 'removal strips our section from INSTRUCTIONS.md and keeps the user\'s');
+} finally {
+  fs.rmSync(lh, { recursive: true, force: true });
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

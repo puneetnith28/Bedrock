@@ -53,17 +53,13 @@ function buildInvocation(ctx: McpWriteContext): { command: string; args: string[
 }
 
 /**
- * Write a session-scoped MCP config JSON for a Claude agent. The file is
- * passed to Claude Code via `--mcp-config <path>` so the Conduit MCP server
- * is only loaded for this specific session (and is cleanly removed when the
- * file is deleted). Does not touch the user's global ~/.claude.json.
+ * The per-agent MCP server as a stdio command: what to run, with what, in
+ * which environment. Every CLI that can host it gets this same definition —
+ * Claude through `--mcp-config`, LocalHarness through its agent's
+ * `tools.mcp_servers`.
  */
-export function writeClaudeMcpConfig(ctx: McpWriteContext): string {
-  const dir = getClaudeMcpConfigDir();
-  fs.mkdirSync(dir, { recursive: true });
-
+export function bedrockMcpServer(ctx: McpWriteContext): { command: string; args: string[]; env: Record<string, string> } {
   const invocation = buildInvocation(ctx);
-  const configPath = getClaudeMcpConfigPath(ctx.agent.id);
   // When the web server is password-protected, the MCP server needs the same
   // credential to call back into it.
   const auth = getAuthConfig();
@@ -73,12 +69,27 @@ export function writeClaudeMcpConfig(ctx: McpWriteContext): string {
   // Say so explicitly rather than relying on the variable happening to survive
   // daemon → shell → agent CLI → MCP child inheritance.
   if (process.versions.electron) env.ELECTRON_RUN_AS_NODE = '1';
+  return { ...invocation, env };
+}
+
+/**
+ * Write a session-scoped MCP config JSON for a Claude agent. The file is
+ * passed to Claude Code via `--mcp-config <path>` so the Conduit MCP server
+ * is only loaded for this specific session (and is cleanly removed when the
+ * file is deleted). Does not touch the user's global ~/.claude.json.
+ */
+export function writeClaudeMcpConfig(ctx: McpWriteContext): string {
+  const dir = getClaudeMcpConfigDir();
+  fs.mkdirSync(dir, { recursive: true });
+
+  const { command, args, env } = bedrockMcpServer(ctx);
+  const configPath = getClaudeMcpConfigPath(ctx.agent.id);
   const config = {
     mcpServers: {
       conduit: {
         type: 'stdio',
-        command: invocation.command,
-        args: invocation.args,
+        command,
+        args,
         ...(Object.keys(env).length ? { env } : {}),
       },
     },
