@@ -105,6 +105,42 @@ try {
   t(file?.path === 'notes.md', 'an edit tool call becomes a file item');
   t(w.stopReason === 'cancelled' && file.status === 'failed', 'and the unanswerable permission request is refused', JSON.stringify(w));
 
+  // 6b. With gates wired in, a permission request waits for a human.
+  const raised = [];
+  const cleared = [];
+  lh.setPermissionHandlers({
+    raise: (projectId, agentId, prompt, options) => { raised.push({ agentId, prompt, options }); return true; },
+    cleared: (_projectId, agentId) => cleared.push(agentId),
+  });
+  statuses.length = 0;
+  const pending = lh.askAgent(agent.id, 'write');
+  t(await waitFor(() => raised.length === 1), 'a permission request raises a gate');
+  t(/asks permission/.test(raised[0].prompt) && /write notes\.md/.test(raised[0].prompt) && /path: notes\.md/.test(raised[0].prompt),
+    'the gate says what is asked and where', raised[0].prompt);
+  t(raised[0].options.map((o) => o.id).join(',') === 'allow_once,allow_always,reject_once,reject_always',
+    'and carries the four answers the agent offered');
+  t(statuses.at(-1) === `${agent.id}:awaiting_input`, 'the agent shows as waiting on the human meanwhile', statuses.join(','));
+  t(lh.answerPermission(agent.id, 'allow_always'), 'answering resolves the request');
+  const allowed = await pending;
+  t(/allow_always/.test(allowed.text), 'the agent proceeds with exactly the chosen answer', allowed.text);
+  t(last(agent.id, 'file').status === 'done', 'and its tool call completes');
+  t(!lh.answerPermission(agent.id, 'allow_once'), 'nothing is pending afterwards');
+
+  const p2 = lh.askAgent(agent.id, 'write');
+  await waitFor(() => raised.length === 2);
+  lh.answerPermission(agent.id, 'not-an-offered-option');
+  t((await p2).stopReason === 'cancelled', 'an option the agent did not offer is a refusal, not a yes');
+
+  const p3 = lh.askAgent(agent.id, 'write');
+  await waitFor(() => raised.length === 3);
+  lh.interruptAgent(agent.id);
+  t((await p3).stopReason === 'cancelled' && cleared.includes(agent.id), 'cancelling while it waits refuses it and takes the gate down');
+
+  lh.setPermissionHandlers({ raise: () => false, cleared: () => {} });
+  const p4 = await lh.askAgent(agent.id, 'write');
+  t(p4.stopReason === 'cancelled', 'a request whose gate cannot be raised is refused, not left hanging');
+  lh.setPermissionHandlers(null);
+
   // 7. The Supervisor's text view.
   const seen = [];
   const off = lh.subscribeText(agent.id, (txt) => seen.push(txt));

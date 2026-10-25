@@ -12,6 +12,7 @@
  */
 
 import { isAnswerable } from './gate-answer.js';
+import type { GateSource } from './types.js';
 
 export const COMMON_GATE_PATTERNS = [
   /\[y\/N\]/i,
@@ -107,10 +108,17 @@ export type GateRisk = 'routine' | 'harmful';
 // src/gate-answer.ts, which is also what decides whether a prompt can be
 // handled without a human at all.
 
-export function classifyGate(prompt: string, source: 'regex' | 'supervisor'): GateRisk {
-  // A model already read the context and called this risky. A regex does not
-  // get to overrule that.
-  if (source === 'supervisor') return 'harmful';
+export function classifyGate(prompt: string, source: GateSource): GateRisk {
+  // Only a prompt matched in a terminal can be routine; the rest are always
+  // the human's call.
+  //   supervisor — a model already read the context and called this risky.
+  //                A regex does not get to overrule that.
+  //   acp        — the agent's own permission gate decided this needs a
+  //                person. Answering it is selecting an option, not typing,
+  //                so the keystroke test below would not even apply: text
+  //                in its prompt that happened to look like [y/N] would have
+  //                "answered" it by typing y into the agent's composer.
+  if (source !== 'regex') return 'harmful';
   if (checkGate(prompt).highRisk) return 'harmful';
 
   // Routine means two things at once, and it used to mean only the first:

@@ -181,3 +181,16 @@ export function isLocalHarnessSession(agentId: string): boolean {
 export function askLocalHarnessAgent(agentId: string, message: string, timeoutMs?: number) {
   return lh.askAgent(agentId, message, timeoutMs);
 }
+
+/** How an ACP agent's permission request becomes an approval gate (the daemon installs it). */
+export function setPermissionHandlers(h: lh.PermissionHandlers | null): void {
+  lh.setPermissionHandlers(h);
+}
+
+/**
+ * Answer an ACP agent's pending permission request with one of the options it
+ * offered, or null to refuse. Only gate resolution calls this.
+ */
+export function answerPermission(agentId: string, optionId: string | null): boolean {
+  return lh.answerPermission(agentId, optionId);
+}

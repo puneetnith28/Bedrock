@@ -20,6 +20,23 @@ export interface Project {
  */
 export type AgentStatus = 'stopped' | 'running' | 'idle' | 'awaiting_input';
 
+/**
+ * Where an approval gate came from.
+ *   regex      — a prompt matched in a terminal (a y/n question, a trust menu)
+ *   supervisor — the Supervisor called the agent's next step risky
+ *   acp        — the agent itself asked, over the Agent Client Protocol
+ *                (LocalHarness's permission request), with exact options
+ */
+export type GateSource = 'regex' | 'supervisor' | 'acp';
+
+/** One answer an ACP agent offers to its own permission request. */
+export interface GateOption {
+  id: string;
+  name: string;
+  /** allow_once | allow_always | reject_once | reject_always */
+  kind: string;
+}
+
 export interface Agent {
   id: string;
   projectId: string;
@@ -41,8 +58,10 @@ export interface Agent {
   };
   pendingGate?: {
     prompt: string;
-    source: 'regex' | 'supervisor';
+    source: GateSource;
     options?: string[];
+    /** source 'acp': the answers the agent offered, which resolution picks from. */
+    acpOptions?: GateOption[];
   };
   lastExitCode?: number | null;
   lastExitSignal?: string | null;
@@ -138,7 +157,7 @@ export type WSServerMessage =
   | { type: 'codex:item'; agentId: string; item: CodexItem }
   | { type: 'supervisor:update'; payload: any }
   | { type: 'groupchat:message'; payload: any }
-  | { type: 'gate:triggered'; agentId: string; projectId: string; prompt: string; source: 'regex' | 'supervisor'; options?: string[] }
+  | { type: 'gate:triggered'; agentId: string; projectId: string; prompt: string; source: GateSource; options?: string[] }
   | { type: 'gate:resolved'; agentId: string }
   | { type: 'plan:created'; plan: Plan }
   | { type: 'plan:resolved'; planId: string; decision: string }

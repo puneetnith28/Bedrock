@@ -6,6 +6,8 @@
  * local-only WebSocket.
  */
 
+import type { GateSource } from '../types.js';
+
 export const DAEMON_HOST = '127.0.0.1';
 export const DAEMON_PORT = parseInt(process.env.CONDUIT_DAEMON_PORT || '3210', 10);
 export const DAEMON_URL = `ws://${DAEMON_HOST}:${DAEMON_PORT}`;
@@ -135,7 +137,10 @@ export type DaemonCommand =
   | { op: 'brain:abort' }
   | { op: 'brain:switch'; conversationId: string }
   | { op: 'brain:delete'; conversationId: string }
-  | { op: 'gates:reload' };
+  | { op: 'gates:reload' }
+  // Answer an ACP agent's pending permission request: an offered option id,
+  // or null to cancel it. Sent only by gate-resolve.ts.
+  | { op: 'gate:answer'; agentId: string; optionId: string | null };
 
 export type DaemonRequest = DaemonRpcRequest | DaemonCommand;
 
@@ -167,7 +172,7 @@ export type DaemonMessage =
   | { kind: 'event'; event: 'org:changed' }
   | { kind: 'event'; event: 'supervisor:update'; payload: { agentId: string; projectId: string; classification: string; summary: string; ts: string } }
   | { kind: 'event'; event: 'groupchat:message'; payload: any }
-  | { kind: 'event'; event: 'gate:triggered'; agentId: string; projectId: string; prompt: string; source: 'regex' | 'supervisor'; options?: string[] }
+  | { kind: 'event'; event: 'gate:triggered'; agentId: string; projectId: string; prompt: string; source: GateSource; options?: string[] }
   | { kind: 'event'; event: 'gate:resolved'; agentId: string }
   | { kind: 'event'; event: 'codex:item'; agentId: string; item: CodexItem };
 
@@ -176,7 +181,7 @@ export interface GateEvent {
   agentId: string;
   projectId: string;
   prompt: string;
-  source: 'regex' | 'supervisor';
+  source: GateSource;
   options?: string[];
 }
 

@@ -26,13 +26,16 @@
  * `reject` needs none of this. Refusing is always safe and always available.
  */
 
+// Type-only: erased at runtime, so this module stays free of imports.
+import type { GateSource } from '../types.js';
+
 /** What the server knows about a gate right now. */
 export interface GateSnapshot {
   projectId: string;
   agentId: string;
   agentName: string;
   prompt: string;
-  source: 'regex' | 'supervisor';
+  source: GateSource;
 }
 
 /** How long a spoken description stays good for. */

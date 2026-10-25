@@ -27,6 +27,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { classifyGate } from './gatePatterns.js';
+import type { GateSource } from './types.js';
 
 export interface GateSettings {
   /** Answer ordinary y/n prompts without asking. Harmful gates ignore this. */
@@ -87,7 +88,7 @@ export function resetGateSettingsCache(): void {
 }
 
 /** True when Conduit should answer this gate itself. */
-export function shouldAutoApprove(prompt: string, source: 'regex' | 'supervisor'): boolean {
+export function shouldAutoApprove(prompt: string, source: GateSource): boolean {
   if (!loadGateSettings().autoApproveRoutine) return false;
   return classifyGate(prompt, source) === 'routine';
 }
