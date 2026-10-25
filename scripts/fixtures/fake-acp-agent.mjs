@@ -54,6 +54,19 @@ async function runTurn(text) {
     say(' world');
     return 'end_turn';
   }
+  if (text === 'trustme') {
+    // LocalHarness's workspace-trust question: only a permanent yes is offered.
+    const answer = await ask('session/request_permission', {
+      sessionId,
+      toolCall: { toolCallId: 'ask-trust', title: 'Trust this workspace? LocalHarness will load its config.', kind: 'other', status: 'pending' },
+      options: [
+        { optionId: 'allow_always', name: 'Trust this workspace', kind: 'allow_always' },
+        { optionId: 'reject_once', name: 'Not now', kind: 'reject_once' },
+      ],
+    });
+    say(answer?.outcome?.outcome === 'selected' ? 'trusted:' + answer.outcome.optionId : 'not trusted');
+    return 'end_turn';
+  }
   if (text === 'countpokes') {
     // How many blank lines arrived while this turn was waiting.
     const before = pokes;
