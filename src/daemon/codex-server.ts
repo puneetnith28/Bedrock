@@ -204,3 +204,12 @@ export class CodexAppServer {
 }
 
 export const FALLBACK_MODELS = ['o1', 'o3-mini', 'gpt-4o'];
+
+export function safeParseJsonRpc(line: string): unknown | null {
+  try {
+    return JSON.parse(line);
+  } catch (err) {
+    console.warn('[codex-rpc] Parse failure:', (err as Error).message);
+    return null;
+  }
+}
