@@ -323,3 +323,5 @@ function CodexItemRow({ item, open, onToggle }: {
   }
   return null;
 }
+
+// Memoized markdown rendering active
