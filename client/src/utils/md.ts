@@ -34,3 +34,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     }
   }
 });
+
+export function sanitizeMarkdownUris(content: string): string {
+  return content.replace(/javascript:[^\s)]+/gi, '#');
+}
