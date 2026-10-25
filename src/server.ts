@@ -754,3 +754,7 @@ server.listen(PORT, HOST, () => {
 export const STATE_BROADCAST_DEBOUNCE_MS = 50;
 
 export const WEBSOCKET_HEARTBEAT_INTERVAL_MS = 30000;
+
+export function isolateVoiceWebsocketError(err: Error): void {
+  console.warn('[voice ws isolated error]', err.message);
+}
