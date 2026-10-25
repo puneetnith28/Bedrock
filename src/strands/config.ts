@@ -54,3 +54,7 @@ export function supervisorProvider(): 'auto' | 'anthropic' | 'bedrock' {
 // which uses the standard AWS SDK provider chain — AWS_ACCESS_KEY_ID /
 // AWS_SECRET_ACCESS_KEY from the environment or .env, ~/.aws/credentials, or
 // an EC2 / ECS instance role when running on AWS.
+
+export function validateInferenceProfileArn(arn: string): boolean {
+  return /^arn:aws:bedrock:[a-z0-9-]+:[0-9]{12}:inference-profile\/[a-zA-Z0-9.-]+$/.test(arn);
+}
