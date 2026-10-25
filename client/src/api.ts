@@ -1,3 +1,21 @@
+export class ApiError extends Error {
+  constructor(
+    public statusCode: number,
+    public code: string,
+    message: string,
+    public body?: unknown
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+export function normalizeError(err: unknown): ApiError {
+  if (err instanceof ApiError) return err;
+  if (err instanceof Error) return new ApiError(500, 'INTERNAL_ERROR', err.message);
+  return new ApiError(500, 'UNKNOWN_ERROR', String(err));
+}
+
 const BASE = '/api';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
