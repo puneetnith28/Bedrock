@@ -1,12 +1,12 @@
 # Agent Runtime
 
-Six CLIs, two runtimes, one registry.
+Seven CLIs, three runtimes, one registry.
 
 `src/cli-registry.ts` is the single source of truth: the id, the binary that must be on
 PATH, the command that installs it, and any environment variable it needs. **Adding a CLI
 is one edit there.**
 
-## The six
+## The seven
 
 | id | Label | Runs as | Status from | MCP messaging |
 |---|---|---|---|---|
@@ -16,13 +16,14 @@ is one edit there.**
 | `opencode` | OpenCode | PTY | process liveness | ❌ |
 | `gpt` | GPT-OSS 120B (Groq) | PTY via `aider` | process liveness | ❌ |
 | `nemotron` | Nemotron (OpenRouter) | PTY via `aider` | process liveness | ❌ |
+| `localharness` | LocalHarness (local model) | ACP session (`localharness acp`), or PTY in terminal mode | ACP turn lifecycle | ✅ via its config dir |
 
-Only Claude and Codex report fine-grained status, because only they emit lifecycle events.
+Claude, Codex and LocalHarness report fine-grained status, because they emit lifecycle events.
 The others report whether the process is alive. See [Data Model](data-model.md#the-agent-status-machine).
 
 ## Two runtimes
 
-`src/daemon/runtime.ts` routes every operation to one of two implementations.
+`src/daemon/runtime.ts` routes every operation to one of three implementations.
 
 **PTY agents** (`src/pty-manager.ts`) get a real pseudo-terminal via `node-pty`. Output is
 buffered so a browser attaching later gets a replay rather than a blank screen. Input is
@@ -31,6 +32,11 @@ raw keystrokes — which is why the terminal is genuinely interactive and you ca
 **Codex** (`src/daemon/codex-agents.ts`) is not a terminal. `codex app-server` speaks
 JSON-RPC and emits structured items — tool calls, diffs, reasoning — which the UI renders
 as a transcript rather than a terminal. `src/daemon/codex-server.ts` is the client.
+
+**LocalHarness** (`src/daemon/localharness-agents.ts`) is an Agent Client Protocol session:
+`localharness acp` on stdio, one process per agent. Its updates are mapped onto the same
+structured items Codex produces, so the same view renders them. See **LocalHarness,
+specifically** below.
 
 ## How each is told about the project
 
@@ -43,11 +49,38 @@ Every agent is given the project's shared folder and wiki, in whatever way that 
 | Gemini | `--include-directories` |
 | OpenCode | `AGENTS.md` |
 | aider (`gpt`, `nemotron`) | `--read AGENTS.md` |
+| LocalHarness | the first of `CLAUDE.md`, `AGENTS.md`, `.localharness/INSTRUCTIONS.md` it finds |
 
 Bedrock appends a delimited section to `CLAUDE.md` (for Claude) or `AGENTS.md` (everything
 else) in the project directory, so the agent starts knowing what Bedrock is, who its
 teammates are, and how to reach them. `src/instruction-files.ts` owns that, and removes its
 section when the agent is deleted.
+
+## LocalHarness, specifically
+
+[LocalHarness](https://github.com/ahwurm/localharness) is an agent harness for local models
+(Ollama, LM Studio, vLLM, llama.cpp). Install it with `uv tool install localharness` and run a
+model server; Bedrock points it at `LOCAL_LLM_BASE_URL` (default Ollama,
+`http://127.0.0.1:11434/v1`).
+
+- **Config.** Each agent gets its own LocalHarness config dir, `~/.conduit/localharness/<agentId>`,
+  passed as `LOCALHARNESS_DIR`. LocalHarness writes it (`localharness init --no-input`); Bedrock
+  adds only `agents/orchestrator.yaml` to attach its MCP server, so the agent gets
+  `message_agent` and `list_teammates`. Your own `~/.localharness` is never touched.
+- **Preflight.** Start fails with one sentence when the model server is down, serves no model,
+  or lacks `LOCAL_LLM_MODEL`.
+- **Gates.** Sessions open in Guarded mode. Every permission LocalHarness asks for, including the
+  first-run workspace-trust question, becomes a Bedrock approval gate whose buttons are
+  LocalHarness's own options. ACP gates are never auto-approved. "Approve" allows once; an
+  "always" grant is sent only when a person picks it; a question whose only yes is permanent
+  needs that option picked by name; voice can only ever allow once. Cancel, stop and crash
+  all answer `cancelled`.
+- **Controls.** The agent's toolbar shows the model, the permission mode (Unattended asks for
+  confirmation), effort (`/effort`) and Pending (`/pending`).
+- **Terminal mode** (`flags.terminal`) runs `localharness start` in a PTY instead; its one-key
+  permission menu raises gates too, never auto-approved.
+- **Windows.** While waiting on the agent, Bedrock writes a blank line to its stdin once a
+  second. Without it the first prompt deadlocked on Windows (`src/daemon/acp-client.ts`).
 
 ## aider, specifically
 

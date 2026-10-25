@@ -26,7 +26,12 @@ src/
   auth.ts              CONDUIT_AUTH Basic auth (HTTP + WS upgrade + helper header)
   storage.ts           ~/.conduit JSON/JSONL storage; path-traversal-safe helpers
   env.ts               .env loading (cwd + ~/.conduit/.env); import first in every entry point
-  cli-registry.ts      the six CLI ids, their binaries, install hints and required env
+  cli-registry.ts      the seven CLI ids, their binaries, install hints and required env
+  local-llm.ts         the local OpenAI-compatible model server (LOCAL_LLM_*), probe + settings
+  localharness/        per-agent LocalHarness config dirs (config-dir.ts) and start preflight (prepare.ts)
+  skills.ts, memory.ts SKILL.md discovery; per-project memory — both feed every instruction section
+  agent-templates.ts   .bedrock/agents/*.yaml agent definitions
+  plugins.ts           machine-level plugins (~/.conduit/plugins), read-only event observers
   pty-manager.ts       PTY agents (claude/gemini/opencode/gpt/nemotron): spawn, buffer, inject, quoting
   gatePatterns.ts      stripAnsi + regex gates (y/N prompts, destructive commands)
   gate-resolve.ts      resolving a gate — the ONE implementation, shared by the
@@ -69,6 +74,13 @@ scripts/
 ```
 
 ## Rules that are easy to break by accident
+
+- **ACP gates are never auto-approved, and an "always" is never a default.** A LocalHarness
+  permission request is a gate with `source: 'acp'`; `classifyGate` calls every non-regex
+  gate harmful, and `pickAcpOption` in `gate-resolve.ts` turns a plain approve into allow-once
+  only. Voice can therefore never grant a remembered permission. Keep both true.
+- **Keep an ACP agent's stdin supplied while waiting on it** (`AcpConnection.keepAwake`). On
+  Windows LocalHarness deadlocks on its first prompt otherwise.
 
 - **Gate resolution has one implementation.** `src/gate-resolve.ts`. The REST route and the
   voice path both call it. Two copies of "what actually reaches the agent" will drift, and
