@@ -290,3 +290,5 @@ export default function Terminal({ agentId, ws, onFocus, focused }: Props) {
 }
 
 // Terminal scroll events throttled
+
+export let isTerminalAttachPending = false;
