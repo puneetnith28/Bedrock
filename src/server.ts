@@ -758,3 +758,5 @@ export const WEBSOCKET_HEARTBEAT_INTERVAL_MS = 30000;
 export function isolateVoiceWebsocketError(err: Error): void {
   console.warn('[voice ws isolated error]', err.message);
 }
+
+// Brotli and Gzip compression enabled
