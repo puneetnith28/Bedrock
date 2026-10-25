@@ -305,11 +305,16 @@ async function main() {
             name: { type: 'string', description: 'Agent name, e.g. "Backend".' },
             cli: {
               type: 'string',
-              enum: ['claude', 'codex', 'gemini', 'opencode', 'gpt', 'nemotron'],
+              // Spelled out rather than imported from cli-registry: that module
+              // loads .env on import, and this process's stdout is the MCP
+              // channel. scripts/test-keeper-cli-enum.mjs fails if they differ.
+              enum: ['claude', 'codex', 'gemini', 'opencode', 'gpt', 'nemotron', 'localharness'],
               description:
                 'Which CLI runs this agent. claude = Claude Code, codex = Codex CLI, '
                 + 'gemini = Gemini CLI, opencode = OpenCode, gpt = GPT-OSS 120B on Groq (via aider), '
-                + 'nemotron = Nemotron 3.5 Lightning on OpenRouter (via aider).',
+                + 'nemotron = Nemotron 3.5 Lightning on OpenRouter (via aider), '
+                + 'localharness = LocalHarness on the local model server (no cloud API key; '
+                + 'its permission requests come to the user as approval gates).',
             },
             role: {
               type: 'string',
