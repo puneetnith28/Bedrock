@@ -4,13 +4,13 @@
   "private": true,
   "description": "Bedrock is an open-source, local-first foundation for persistent, secure, and verifiable AI agent execution.",
   "author": {
-    "name": "Dev Prashant",
-    "email": "adoranto737@gmail.com"
+    "name": "Puneet Yadav",
+    "email": "puneetnith28@gmail.com"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/devprashant19/Conduit.git"
+    "url": "git+https://github.com/puneetnith28/Bedrock.git"
   },
   "main": "dist/electron/main.mjs",
   "scripts": {
@@ -88,5 +88,19 @@
     "tsup": "^8.2.4",
     "typescript": "^5.5.4",
     "vite": "^5.4.3"
-  }
+  },
+  "homepage": "https://github.com/puneetnith28/Bedrock#readme",
+  "bugs": {
+    "url": "https://github.com/puneetnith28/Bedrock/issues"
+  },
+  "contributors": [
+    {
+      "name": "Puneet Yadav",
+      "email": "puneetnith28@gmail.com"
+    },
+    {
+      "name": "devprashant19",
+      "email": "devprashant19@users.noreply.github.com"
+    }
+  ]
 }

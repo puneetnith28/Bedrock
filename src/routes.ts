@@ -122,7 +122,7 @@ export function createDownloadRouter() {
     }
 
     res.redirect(
-      `https://github.com/devprashant19/Conduit/releases/latest/download/${encodeURIComponent(filename)}`,
+      `https://github.com/puneetnith28/Bedrock/releases/latest/download/${encodeURIComponent(filename)}`,
     );
   });
 
