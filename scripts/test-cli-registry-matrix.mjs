@@ -4,7 +4,7 @@ import path from 'node:path';
 
 function resolveBinaryPath(bin, paths) {
   for (const p of paths) {
-    const candidate = path.join(p, bin);
+    const candidate = path.posix.join(p, bin);
     return candidate; // mock match
   }
   return null;
