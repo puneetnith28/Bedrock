@@ -1,3 +1,4 @@
+import { createProjectRouter } from './controllers/project-routes.js';
 import { Router, type Request, type Response } from 'express';
 import fs from 'fs';
 import os from 'os';
