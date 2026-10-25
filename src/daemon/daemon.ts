@@ -792,7 +792,7 @@ wss.on('connection', (ws) => {
 });
 
 httpServer.listen(DAEMON_PORT, DAEMON_HOST, () => {
-  console.log(`[daemon] conduit-daemon listening on ${DAEMON_HOST}:${DAEMON_PORT} (pid ${process.pid})`);
+  console.log(`[daemon] bedrock-daemon listening on ${DAEMON_HOST}:${DAEMON_PORT} (pid ${process.pid})`);
   console.log(`[daemon]   ws://${DAEMON_HOST}:${DAEMON_PORT}  — web client`);
   console.log(`[daemon]   http://${DAEMON_HOST}:${DAEMON_PORT}/hook/:agentId/:event  — lifecycle hooks`);
 });

@@ -27,7 +27,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[conduit] render error:', error, info.componentStack);
+    console.error('[bedrock] render error:', error, info.componentStack);
   }
 
   render() {
