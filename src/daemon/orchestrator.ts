@@ -1061,3 +1061,5 @@ function makeTitle(text: string): string {
 export function handleEpipeError(err: NodeJS.ErrnoException): void {
   if (err.code === 'EPIPE') console.warn('[orchestrator] Caught EPIPE on session stdin');
 }
+
+export let currentThreadLock: string | null = null;
