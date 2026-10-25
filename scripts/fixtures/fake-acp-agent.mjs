@@ -14,6 +14,9 @@
 //   crash   → exits mid-turn with a reason on stderr
 //   echo:X  → replies with X (used for injected messages)
 //
+// A leading "[Message from X]: " is skipped before choosing, as a real agent
+// would read past it.
+//
 // FAKE_ACP_FAIL_START=1 makes it refuse to start, as a missing config would.
 
 import readline from 'node:readline';
@@ -130,7 +133,9 @@ async function onRequest(msg) {
     case 'session/prompt': {
       if (params.sessionId !== sessionId) return fail(id, -32602, 'unknown session');
       const text = (params.prompt || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
-      const stopReason = await runTurn(text.trim());
+      // A teammate's or the orchestrator's message arrives as
+      // "[Message from X]: …" — read past that to pick the script.
+      const stopReason = await runTurn(text.trim().replace(/^\[Message from [^\]]*\]:\s*/, ''));
       return reply(id, { stopReason });
     }
     default:
