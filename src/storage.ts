@@ -1122,3 +1122,8 @@ export function updateWikiFile(projectId: string, filename: string, content: str
 }
 
 export { SHARED_CONTENT_DIR, WIKI_DIR };
+
+const WINDOWS_RESERVED_NAMES = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
+export function isWindowsReservedName(baseName: string): boolean {
+  return WINDOWS_RESERVED_NAMES.test(baseName.split('.')[0]);
+}
