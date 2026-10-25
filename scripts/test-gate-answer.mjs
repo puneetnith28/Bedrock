@@ -131,6 +131,23 @@ t(['rm -rf', 'git push --force', 'DROP TABLE']
   .every((c) => classifyGate(`${c} [y/N]`, 'regex') === 'harmful'),
   'destructive wins over answerable, every time');
 
+// LocalHarness in terminal mode: answerable with one key, but never routine —
+// its own permission gate asked because a person has to decide.
+{
+  const perm = 'Permission needed: write src/app.ts\n [y]es once   [a]lways here   [n]o   [N]ever here ';
+  const a = answerFor(perm);
+  t(a && a.approve.length === 1 && a.approve[0].data === 'y' && a.reject[0].data === 'n',
+    'LocalHarness\'s menu is answered with a single y or n', JSON.stringify(a));
+  t(a && !a.approve[0].data.includes('\r') && !a.reject[0].data.includes('\r'),
+    'with no Enter — Enter is that menu\'s "no"');
+  t(a && (a.approve[0].delayMs ?? 0) > 0, 'after a lead-in, so the key does not land while the menu draws');
+  t(classifyGate(perm, 'regex') === 'harmful', 'and it is never routine: auto-approval cannot click through it');
+  const trust = ' [y]es, trust it   [n]o, ask me (guarded) ';
+  t(answerFor(trust)?.describe === 'trusted the workspace' && classifyGate(trust, 'regex') === 'harmful',
+    'its workspace trust question likewise waits for a person');
+  t(!isTrustPrompt(trust), 'and is not mistaken for Claude\'s arrow-menu trust prompt');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) {
   console.log('\nfailures:');
