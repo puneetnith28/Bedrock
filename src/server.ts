@@ -750,3 +750,5 @@ server.listen(PORT, HOST, () => {
         : `${bedrock}, falling back to ${anthropic}`}`);
   }
 });
+
+export const STATE_BROADCAST_DEBOUNCE_MS = 50;
