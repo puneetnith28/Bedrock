@@ -97,12 +97,78 @@ export function findOnPath(binary: string): string | null {
   return null;
 }
 
+export interface BinaryAvailability {
+  available: boolean;
+  binary: string;
+  path?: string;
+  prerequisites?: {
+    python?: boolean;
+    uv?: boolean;
+  };
+  hint?: string;
+}
+
+/**
+ * Health check probe for CLI binaries and helper toolchains (uv, python).
+ */
+export function checkBinaryAvailability(cli: CliId): BinaryAvailability {
+  const spec = CLI_SPECS[cli];
+  if (!spec) {
+    return { available: false, binary: cli, hint: `Unknown CLI ${cli}` };
+  }
+
+  const binaryPath = findOnPath(spec.binary);
+  if (spec.binary === 'aider') {
+    const hasUv = !!findOnPath('uv');
+    const hasPython = !!(findOnPath('python3') || findOnPath('python'));
+    const prereqs = { uv: hasUv, python: hasPython };
+
+    if (!binaryPath) {
+      const hint = hasUv
+        ? 'uv is installed. Run: uv tool install --python 3.12 aider-chat'
+        : 'Install uv (https://astral.sh/uv) or Python 3.10-3.12, then run: uv tool install aider-chat';
+      return {
+        available: false,
+        binary: 'aider',
+        prerequisites: prereqs,
+        hint,
+      };
+    }
+
+    return {
+      available: true,
+      binary: 'aider',
+      path: binaryPath,
+      prerequisites: prereqs,
+    };
+  }
+
+  if (!binaryPath) {
+    return {
+      available: false,
+      binary: spec.binary,
+      hint: `Install with: ${spec.install}`,
+    };
+  }
+
+  return {
+    available: true,
+    binary: spec.binary,
+    path: binaryPath,
+  };
+}
+
 export interface CliReadiness {
   ok: boolean;
   /** Absolute path to the resolved binary, when found. */
   resolved?: string;
   /** Human-readable reason, when not ok. */
   error?: string;
+  /** Detailed toolchain prerequisites */
+  prerequisites?: {
+    python?: boolean;
+    uv?: boolean;
+  };
 }
 
 /**
@@ -114,32 +180,28 @@ export function checkCliReady(cli: CliId): CliReadiness {
   const spec = CLI_SPECS[cli];
   if (!spec) return { ok: false, error: `Unknown agent type "${cli}".` };
 
-  const resolved = findOnPath(spec.binary);
-  if (!resolved) {
+  const availability = checkBinaryAvailability(cli);
+  if (!availability.available) {
+    const extra = availability.hint ? `\n${availability.hint}` : `\nInstall it with:  ${spec.install}`;
     return {
       ok: false,
-      error: `${spec.label} needs the \`${spec.binary}\` command, which is not on PATH.\nInstall it with:  ${spec.install}`,
+      error: `${spec.label} needs the \`${spec.binary}\` command, which is not on PATH.${extra}`,
+      prerequisites: availability.prerequisites,
     };
   }
 
+  const resolved = availability.path;
   const missing = (spec.requiresEnv || []).filter((k) => !(process.env[k] || '').trim());
   if (missing.length) {
     return {
       ok: false,
       resolved,
-      // Name the file explicitly: a desktop user has no repo to put a .env in,
-      // and the packaged app reads ~/.conduit/.env (see src/env.ts).
+      prerequisites: availability.prerequisites,
       error: `${spec.label} needs ${missing.join(' and ')} set. Add ${missing.length === 1 ? 'it' : 'them'} to `
         + `${userEnvPath()} (or the .env next to the server) and restart Bedrock.`,
     };
   }
 
-  return { ok: true, resolved };
+  return { ok: true, resolved, prerequisites: availability.prerequisites };
 }
 
-export function assertNonEmptyApiKey(key: string | undefined, provider: string): string {
-  if (!key || !key.trim()) throw new Error(`Missing or empty API key for ${provider}`);
-  return key.trim();
-}
-
-// Environment restart guidance: restart Bedrock daemon
