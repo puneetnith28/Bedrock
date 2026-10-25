@@ -136,3 +136,8 @@ export function checkCliReady(cli: CliId): CliReadiness {
 
   return { ok: true, resolved };
 }
+
+export function assertNonEmptyApiKey(key: string | undefined, provider: string): string {
+  if (!key || !key.trim()) throw new Error(`Missing or empty API key for ${provider}`);
+  return key.trim();
+}
