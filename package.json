@@ -52,7 +52,8 @@
     "architecture": "node scripts/make-architecture.mjs",
     "check:mermaid": "node scripts/check-mermaid.mjs",
     "lint": "echo 'Linting passed' && exit 0",
-    "format": "echo 'Formatting passed' && exit 0"
+    "format": "echo 'Formatting passed' && exit 0",
+    "package:release": "node scripts/package-release.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.109.1",
