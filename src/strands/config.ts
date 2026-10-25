@@ -40,13 +40,19 @@ export function supervisorDisabled(): boolean {
  *   'bedrock'   — Strands + Amazon Bedrock only
  *   'anthropic' — the Anthropic Messages API only (ANTHROPIC_API_KEY, or the
  *                 Claude Code OAuth token on this machine)
+ *   'local'     — Strands + the local OpenAI-compatible model server only
+ *                 (LOCAL_LLM_BASE_URL — Ollama, LM Studio, vLLM, llama.cpp)
  *   'auto'      — Bedrock first, Anthropic when Bedrock has no usable
- *                 credentials (the default)
+ *                 credentials (the default), then the local server — but only
+ *                 when LOCAL_LLM_BASE_URL is set on purpose
  */
-export function supervisorProvider(): 'auto' | 'anthropic' | 'bedrock' {
+export type SupervisorProvider = 'auto' | 'anthropic' | 'bedrock' | 'local';
+
+export function supervisorProvider(): SupervisorProvider {
   const v = (process.env.SUPERVISOR_PROVIDER || '').trim().toLowerCase();
   if (v === 'anthropic' || v === 'claude') return 'anthropic';
   if (v === 'bedrock' || v === 'aws') return 'bedrock';
+  if (v === 'local' || v === 'ollama' || v === 'lmstudio') return 'local';
   return 'auto';
 }
 

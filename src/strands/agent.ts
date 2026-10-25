@@ -1,8 +1,10 @@
 import { Agent, BedrockModel, tool } from '@strands-agents/sdk';
 // Ships behind its own subpath export; only BedrockModel is on the root.
 import { AnthropicModel } from '@strands-agents/sdk/models/anthropic';
+import { OpenAIModel } from '@strands-agents/sdk/models/openai';
 import { z } from 'zod';
 import { AWS_REGION, BEDROCK_MODEL_ID } from './config.js';
+import { localLlmSettings } from '../local-llm.js';
 import { anthropicClientOptions, currentModel, supportsTemperature } from './anthropic.js';
 import {
   getProjectOverview,
@@ -34,8 +36,8 @@ const SYSTEM_PROMPT = [
   'situation changed.',
 ].join(' ');
 
-/** Which provider a Supervisor Agent talks to. Both are Strands models. */
-export type SupervisorBackend = 'bedrock' | 'anthropic';
+/** Which provider a Supervisor Agent talks to. All three are Strands models. */
+export type SupervisorBackend = 'bedrock' | 'anthropic' | 'local';
 
 /**
  * The model the Supervisor Agent runs on.
@@ -52,7 +54,22 @@ export type SupervisorBackend = 'bedrock' | 'anthropic';
 function buildModel(
   backend: SupervisorBackend,
   modelOverride?: string,
-): BedrockModel | AnthropicModel {
+): BedrockModel | AnthropicModel | OpenAIModel {
+  if (backend === 'local') {
+    // The local model server (Ollama, LM Studio, vLLM, llama.cpp) through its
+    // OpenAI-compatible Chat Completions API — still a Strands model, so the
+    // Supervisor stays a Strands Agent with no cloud credentials at all. The
+    // caller resolves the model id (the configured one, or the first served).
+    const s = localLlmSettings();
+    return new OpenAIModel({
+      api: 'chat',
+      modelId: modelOverride || s.model,
+      maxTokens: 512,
+      temperature: 0.2,
+      // The OpenAI client insists on a key; local servers ignore it.
+      clientConfig: { baseURL: s.baseUrl, apiKey: s.apiKey === 'none' ? 'local' : s.apiKey },
+    });
+  }
   if (backend === 'anthropic') {
     // The ladder in anthropic.ts picks this: a Claude Code subscription token
     // is commonly allowed on Haiku while the larger models answer 429. The

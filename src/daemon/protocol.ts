@@ -198,7 +198,7 @@ export interface GateEvent {
  */
 export interface SupervisorHealth {
   state: 'off' | 'ok' | 'degraded' | 'failing' | 'idle';
-  provider: 'bedrock' | 'anthropic' | null;
+  provider: 'bedrock' | 'anthropic' | 'local' | null;
   configured: string;
   model: string;
   /** Whether the last good classification ran through the Strands SDK. */
