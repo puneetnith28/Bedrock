@@ -301,3 +301,5 @@ export const debounceTerminalResize = (fn: Function, ms: number = 100) => {
   let t: any;
   return (...args: any[]) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 };
+
+// Bedrock terminal shortcut guide: Ctrl+C terminates active agent session

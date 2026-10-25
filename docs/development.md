@@ -108,3 +108,6 @@ Bedrock utilizes Node.js 22 native type-stripping flags:
 node --experimental-strip-types scripts/run-all-tests.mjs
 ```
 If executing scripts directly, ensure Node >= 22.6.0 is active in your environment.
+
+## Bedrock Execution Model
+Bedrock runs persistent local agents with human-in-the-loop verification.
