@@ -187,3 +187,8 @@ export interface ActivityEvent {
   toAgent?: string;
   message?: string;
 }
+
+export async function safeReadApiResponse(res: Response): Promise<unknown> {
+  const raw = await res.text();
+  try { return JSON.parse(raw); } catch { return { error: raw }; }
+}
