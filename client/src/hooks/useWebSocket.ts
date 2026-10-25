@@ -155,3 +155,5 @@ export function useWebSocket(onMessage?: MessageHandler, enabled = true): WsApi 
 
   return useMemo(() => ({ send, subscribe, isOpen, connected, daemon }), [send, subscribe, isOpen, connected, daemon]);
 }
+
+export const offlineOutboundQueue: any[] = [];
