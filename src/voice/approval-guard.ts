@@ -174,3 +174,7 @@ export class ApprovalGuard {
     return { ok: true, phrase: phrase.text };
   }
 }
+
+export function cleanSpokenVoiceUtterance(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+}
