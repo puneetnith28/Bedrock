@@ -1,0 +1,327 @@
+// Dual-key localStorage migration for Bedrock Codex settings
+export const getCodexStorage = (key: string, fallback: string = ''): string => {
+  try {
+    return localStorage.getItem(`bedrock_codex_${key}`) ?? localStorage.getItem(`conduit_codex_${key}`) ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+export const setCodexStorage = (key: string, value: string): void => {
+  try {
+    localStorage.setItem(`bedrock_codex_${key}`, value);
+  } catch {}
+};
+
+/**
+ * CodexAgentView — structured view for a Codex agent (v2.2).
+ *
+ * Codex agents run on `codex app-server`, which emits structured events; the
+ * daemon maps them to CodexItems. Instead of a flat terminal log, this renders
+ * a real conversation: markdown agent messages, collapsible command / tool /
+ * file cards, red-green diffs. Used in place of <Terminal> for cli==='codex'.
+ */
+
+import { useState, useEffect, useRef, useCallback } from 'react';
+import Ic from './Icons';
+import { renderMarkdown } from '../utils/md';
+import type { WsApi } from '../hooks/useWebSocket';
+
+interface CodexItem {
+  id: string;
+  kind: 'message' | 'reasoning' | 'command' | 'file' | 'tool' | 'error' | 'system';
+  role?: 'agent' | 'user';
+  text?: string;
+  command?: string;
+  output?: string;
+  exitCode?: number | null;
+  path?: string;
+  diff?: string;
+  server?: string;
+  tool?: string;
+  args?: string;
+  result?: string;
+  status?: 'running' | 'done' | 'failed';
+  ts: string;
+}
+
+interface Props {
+  agentId: string;
+  ws: WsApi;
+  onFocus?: () => void;
+  focused?: boolean;
+}
+
+const MODEL_KEY = 'conduit:codex-model';
+const EFFORT_KEY = 'conduit:codex-effort';
+
+export default function CodexAgentView({ agentId, ws, onFocus, focused }: Props) {
+  const [items, setItems] = useState<CodexItem[]>([]);
+  const [input, setInput] = useState('');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [model, setModel] = useState(() => localStorage.getItem(MODEL_KEY) || '');
+  const [effort, setEffort] = useState(() => localStorage.getItem(EFFORT_KEY) || '');
+  const [models, setModels] = useState<string[]>([]);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => { try { localStorage.setItem(MODEL_KEY, model); } catch { /* ignore */ } }, [model]);
+  useEffect(() => { try { localStorage.setItem(EFFORT_KEY, effort); } catch { /* ignore */ } }, [effort]);
+
+  // Available models for the picker (codex `model/list`).
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/codex/models')
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled && Array.isArray(d?.models)) setModels(d.models); })
+      .catch(() => { /* picker just shows "default" */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let attached = false;
+    const attach = () => {
+      if (!ws.isOpen()) return;
+      setItems([]);
+      ws.send({ type: 'terminal:attach', agentId });
+      attached = true;
+    };
+    const unsubscribe = ws.subscribe((msg) => {
+      if (msg.type === 'codex:item' && msg.agentId === agentId && msg.item) {
+        const item = msg.item as CodexItem;
+        setItems((prev) => {
+          const idx = prev.findIndex((i) => i.id === item.id);
+          if (idx >= 0) { const n = prev.slice(); n[idx] = item; return n; }
+          return [...prev, item];
+        });
+      } else if (msg.type === 'ws:open') {
+        attach();
+      } else if (msg.type === 'ws:close') {
+        attached = false;
+      }
+    });
+    attach();
+    return () => {
+      unsubscribe();
+      if (attached) ws.send({ type: 'terminal:detach', agentId });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentId, ws.send, ws.subscribe, ws.isOpen]);
+
+  useEffect(() => {
+    if (focused) inputRef.current?.focus();
+  }, [focused]);
+
+  // Keep the latest item in view.
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [items]);
+
+  const toggle = useCallback((id: string) => {
+    setExpanded((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }, []);
+
+  const submit = () => {
+    const t = input.trim();
+    if (!t) return;
+    const ok = ws.send({
+      type: 'codex:send', agentId, text: t,
+      model: model || undefined, effort: effort || undefined,
+    });
+    if (ok) setInput('');
+  };
+
+  const startNewThread = () => {
+    if (!confirm('Start a new thread? The current conversation stays on disk but this view resets.')) return;
+    setItems([]);
+    setExpanded(new Set());
+    ws.send({ type: 'codex:new-thread', agentId });
+  };
+
+  const working = items.some((i) => i.status === 'running');
+
+  return (
+    <div className="cxv" onMouseDown={() => onFocus?.()}>
+      <div className="cxv-toolbar">
+        <select
+          className="cxv-select"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          title="Model"
+          aria-label="Model"
+        >
+          <option value="">Model: default</option>
+          {models.map((m) => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <select
+          className="cxv-select"
+          value={effort}
+          onChange={(e) => setEffort(e.target.value)}
+          title="Reasoning effort"
+          aria-label="Reasoning effort"
+        >
+          <option value="">Reasoning: default</option>
+          <option value="minimal">minimal</option>
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high">high</option>
+          <option value="xhigh">xhigh</option>
+        </select>
+        <div className="cxv-toolbar-sp" />
+        <button className="cxv-newthread" onClick={startNewThread} title="Start a new thread">
+          + New thread
+        </button>
+      </div>
+      <div className="cxv-body" ref={bodyRef}>
+        {items.length === 0 && (
+          <div className="cxv-empty">{ws.connected ? 'Waiting for the Codex agent…' : 'Reconnecting…'}</div>
+        )}
+        {items.map((it) => (
+          <CodexItemRow
+            key={it.id}
+            item={it}
+            open={expanded.has(it.id)}
+            onToggle={() => toggle(it.id)}
+          />
+        ))}
+        {working && (
+          <div className="cxv-working">
+            <span className="cxv-dot" /><span className="cxv-dot" /><span className="cxv-dot" />
+            working…
+          </div>
+        )}
+      </div>
+      <div className="cxv-compose">
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+          }}
+          placeholder="Message this Codex agent…  (Enter to send)"
+          rows={2}
+          aria-label="Message to Codex agent"
+        />
+        <button className="cxv-send" onClick={submit} disabled={!input.trim() || !ws.connected} title="Send" aria-label="Send">
+          <Ic.send size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CodexItemRow({ item, open, onToggle }: {
+  item: CodexItem;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const it = item;
+
+  if (it.kind === 'system') {
+    return <div className="cxv-system">{it.text}</div>;
+  }
+  if (it.kind === 'error') {
+    return <div className="cxv-error">{it.text}</div>;
+  }
+  if (it.kind === 'message') {
+    if (it.role === 'user') {
+      return <div className="cxv-msg user"><div className="cxv-bubble">{it.text}</div></div>;
+    }
+    return (
+      <div className="cxv-msg agent">
+        <div className="cxv-avatar"><Ic.bolt size={11} /></div>
+        <div
+          className="cxv-md"
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(it.text || '') }}
+        />
+      </div>
+    );
+  }
+  if (it.kind === 'reasoning') {
+    return (
+      <div className="cxv-card">
+        <button className="cxv-card-h" onClick={onToggle} aria-expanded={open}>
+          <Ic.chevR size={10} className={'cxv-chev' + (open ? ' rot' : '')} />
+          <Ic.sparkles size={10} />
+          <span className="cxv-card-t">Thinking</span>
+        </button>
+        {open && (
+          <div
+            className="cxv-card-b cxv-md cxv-reasoning"
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(it.text || '') }}
+          />
+        )}
+      </div>
+    );
+  }
+  if (it.kind === 'command') {
+    const show = open || it.status === 'running';
+    return (
+      <div className="cxv-card">
+        <button className="cxv-card-h cxv-card-h-cmd" onClick={onToggle} aria-expanded={show}>
+          <Ic.chevR size={10} className={'cxv-chev' + (show ? ' rot' : '')} />
+          <Ic.terminal size={10} />
+          <span className="cxv-card-t mono cxv-cmd-t">{it.command || '(command)'}</span>
+          {it.status === 'running'
+            ? <span className="cxv-badge run">running</span>
+            : it.exitCode != null && (
+              <span className={'cxv-badge ' + (it.exitCode === 0 ? 'ok' : 'err')}>
+                exit {it.exitCode}
+              </span>
+            )}
+        </button>
+        {show && it.output && <pre className="cxv-card-b mono">{it.output.trimEnd()}</pre>}
+      </div>
+    );
+  }
+  if (it.kind === 'tool') {
+    return (
+      <div className="cxv-card">
+        <button className="cxv-card-h" onClick={onToggle} aria-expanded={open}>
+          <Ic.chevR size={10} className={'cxv-chev' + (open ? ' rot' : '')} />
+          <Ic.bolt size={10} />
+          <span className="cxv-card-t mono">
+            {(it.server ? it.server + '/' : '') + (it.tool || 'tool')}
+          </span>
+          {it.status === 'running' && <span className="cxv-badge run">running</span>}
+        </button>
+        {open && (
+          <div className="cxv-card-b">
+            {it.args && <div className="cxv-kv"><span className="cxv-kv-k">args</span><pre className="mono">{it.args}</pre></div>}
+            {it.result && <div className="cxv-kv"><span className="cxv-kv-k">result</span><pre className="mono">{it.result}</pre></div>}
+          </div>
+        )}
+      </div>
+    );
+  }
+  if (it.kind === 'file') {
+    return (
+      <div className="cxv-card">
+        <button className="cxv-card-h" onClick={onToggle} aria-expanded={open}>
+          <Ic.chevR size={10} className={'cxv-chev' + (open ? ' rot' : '')} />
+          <Ic.file size={10} />
+          <span className="cxv-card-t mono">{it.path || '(file)'}</span>
+        </button>
+        {open && it.diff && (
+          <pre className="cxv-card-b cxv-diff mono">
+            {it.diff.split('\n').map((line, i) => {
+              let cls = '';
+              if (line.startsWith('+') && !line.startsWith('+++')) cls = 'add';
+              else if (line.startsWith('-') && !line.startsWith('---')) cls = 'del';
+              else if (line.startsWith('@@')) cls = 'hunk';
+              return <div key={i} className={'cxv-diff-l ' + cls}>{line || ' '}</div>;
+            })}
+          </pre>
+        )}
+      </div>
+    );
+  }
+  return null;
+}
+
+// Memoized markdown rendering active
