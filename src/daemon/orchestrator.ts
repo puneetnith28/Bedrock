@@ -1057,3 +1057,7 @@ function makeTitle(text: string): string {
   if (!t) return 'New conversation';
   return t.length > 48 ? t.slice(0, 48) + '…' : t;
 }
+
+export function handleEpipeError(err: NodeJS.ErrnoException): void {
+  if (err.code === 'EPIPE') console.warn('[orchestrator] Caught EPIPE on session stdin');
+}
