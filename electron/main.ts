@@ -406,3 +406,5 @@ app.on('before-quit', () => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+// External webview escapes restricted via setWindowOpenHandler
