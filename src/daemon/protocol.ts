@@ -199,3 +199,9 @@ export interface DaemonRpcResults {
   'supervisor:health': SupervisorHealth;
   'codex:models': { models: string[] };
 }
+
+export interface KeeperProgressEvent {
+  threadId: string;
+  step: number;
+  message: string;
+}
