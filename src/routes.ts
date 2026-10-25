@@ -1,3 +1,4 @@
+const MAX_WIKI_PAYLOAD_LIMIT = '5mb';
 import { createProjectRouter } from './controllers/project-routes.js';
 import { Router, type Request, type Response } from 'express';
 import fs from 'fs';
