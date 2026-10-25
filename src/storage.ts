@@ -1030,3 +1030,7 @@ export function updateWikiFile(projectId: string, filename: string, content: str
 }
 
 export { SHARED_CONTENT_DIR, WIKI_DIR };
+
+export function initBrainDirectory(dirPath: string): void {
+  fs.mkdirSync(dirPath, { recursive: true });
+}
