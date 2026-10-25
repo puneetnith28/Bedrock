@@ -601,6 +601,15 @@ export function writeToAgent(agentId: string, data: string): void {
   }
 }
 
+/** A message from the composer, newlines and all, as one prompt. */
+export function sendPrompt(agentId: string, text: string): boolean {
+  const s = sessions.get(agentId);
+  const clean = text.replace(/\r/g, '').trim();
+  if (!s || !clean) return false;
+  void submit(s, clean);
+  return true;
+}
+
 /** A teammate's message, run as a prompt when the agent is free. */
 export function injectMessage(agentId: string, fromName: string, message: string): boolean {
   const s = sessions.get(agentId);

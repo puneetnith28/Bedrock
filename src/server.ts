@@ -686,6 +686,17 @@ wss.on('connection', (ws) => {
         daemon.command({ op: 'codex:new-thread', agentId: msg.agentId });
         break;
       }
+      case 'localharness:send': {
+        // A whole composer message as one prompt — sending it as terminal
+        // input would split a multi-line message at every newline.
+        if (typeof msg.text !== 'string' || !msg.text.trim()) return;
+        daemon.command({ op: 'localharness:send', agentId: msg.agentId, text: msg.text });
+        break;
+      }
+      case 'localharness:cancel': {
+        daemon.command({ op: 'terminal:interrupt', agentId: msg.agentId });
+        break;
+      }
       case 'brain:send': {
         if (typeof msg.message === 'string' && msg.message.trim()) daemon.sendBrain(msg.message);
         break;

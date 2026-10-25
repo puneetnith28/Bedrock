@@ -60,9 +60,10 @@ export const restartAgent = (projectId: string, agentId: string) =>
   request<{ status: string }>(`/projects/${projectId}/agents/${agentId}/restart`, { method: 'POST' });
 
 // Approval gates + plans
-export const resolveGate = (projectId: string, agentId: string, decision: 'approve' | 'reject' | 'custom', customInput?: string) =>
+/** `optionId`: for an ACP gate, which of the agent's offered answers to pick. */
+export const resolveGate = (projectId: string, agentId: string, decision: 'approve' | 'reject' | 'custom', customInput?: string, optionId?: string) =>
   request<{ success: boolean; action: string }>(`/projects/${projectId}/agents/${agentId}/gate/resolve`, {
-    method: 'POST', body: JSON.stringify({ decision, customInput }),
+    method: 'POST', body: JSON.stringify({ decision, customInput, ...(optionId ? { optionId } : {}) }),
   });
 export const listPlans = (projectId: string) => request<Plan[]>(`/projects/${projectId}/plans`);
 export const resolvePlan = (projectId: string, planId: string, decision: 'approve' | 'reject', reason?: string) =>
@@ -123,10 +124,20 @@ export interface Project {
 
 export type AgentStatus = 'stopped' | 'running' | 'idle' | 'awaiting_input';
 
+/** One answer an ACP agent (LocalHarness) offers to its own permission request. */
+export interface GateOption {
+  id: string;
+  name: string;
+  /** allow_once | allow_always | reject_once | reject_always */
+  kind: string;
+}
+
 export interface PendingGate {
   prompt: string;
-  source: 'regex' | 'supervisor';
+  /** acp: the agent itself asked, and offered `acpOptions` to choose from. */
+  source: 'regex' | 'supervisor' | 'acp';
   options?: string[];
+  acpOptions?: GateOption[];
 }
 
 export interface Agent {
@@ -134,13 +145,15 @@ export interface Agent {
   projectId: string;
   name: string;
   role?: string;
-  cli: 'claude' | 'codex' | 'gemini' | 'opencode' | 'gpt' | 'nemotron';
+  cli: 'claude' | 'codex' | 'gemini' | 'opencode' | 'gpt' | 'nemotron' | 'localharness';
   cwd: string;
   status: AgentStatus;
   pid?: number;
   flags?: {
     dangerouslySkipPermissions?: boolean;
     remoteControl?: boolean;
+    /** LocalHarness: the interactive REPL in a terminal instead of the structured view. */
+    terminal?: boolean;
   };
   pendingGate?: PendingGate;
 }

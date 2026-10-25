@@ -71,6 +71,8 @@ const CLI_ALIASES: Record<string, string[]> = {
   opencode: ['opencode', 'open code'],
   gpt: ['gpt', 'g p t', 'chat gpt', 'gpt oss'],
   nemotron: ['nemotron', 'nemo tron', 'nemotron', 'neumotron'],
+  // Not a bare "local": it is too common a word to route a command on.
+  localharness: ['localharness', 'local harness', 'local harnass', 'local hardness', 'low cal harness'],
 };
 
 function norm(s: string): string {

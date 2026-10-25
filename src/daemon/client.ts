@@ -144,6 +144,7 @@ export class DaemonClient {
           const gate: GateEvent = {
             agentId: msg.agentId, projectId: msg.projectId, prompt: msg.prompt,
             source: msg.source, options: msg.options,
+            ...(msg.acpOptions ? { acpOptions: msg.acpOptions } : {}),
           };
           for (const l of this.gateListeners) l({ kind: 'triggered', gate });
         } else if (msg.event === 'gate:resolved') {

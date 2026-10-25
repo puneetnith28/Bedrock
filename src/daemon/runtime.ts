@@ -177,6 +177,11 @@ export function isLocalHarnessSession(agentId: string): boolean {
   return isLocalHarness(agentId);
 }
 
+/** Send a whole composer message to a LocalHarness agent as one prompt. */
+export function sendLocalHarnessPrompt(agentId: string, text: string): boolean {
+  return lh.sendPrompt(agentId, text);
+}
+
 /** Run a prompt on a LocalHarness agent and wait for its reply (its `ask_agent`). */
 export function askLocalHarnessAgent(agentId: string, message: string, timeoutMs?: number) {
   return lh.askAgent(agentId, message, timeoutMs);

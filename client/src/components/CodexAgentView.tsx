@@ -49,12 +49,21 @@ interface Props {
   ws: WsApi;
   onFocus?: () => void;
   focused?: boolean;
+  /**
+   * Which structured runtime feeds this view. LocalHarness (over ACP) emits
+   * the same items as Codex, but has none of Codex's model / effort / thread
+   * controls — its model is set per agent — and is sent to and stopped through
+   * its own messages.
+   */
+  variant?: 'codex' | 'localharness';
 }
 
 const MODEL_KEY = 'conduit:codex-model';
 const EFFORT_KEY = 'conduit:codex-effort';
 
-export default function CodexAgentView({ agentId, ws, onFocus, focused }: Props) {
+export default function CodexAgentView({ agentId, ws, onFocus, focused, variant = 'codex' }: Props) {
+  const isCodex = variant === 'codex';
+  const label = isCodex ? 'Codex' : 'LocalHarness';
   const [items, setItems] = useState<CodexItem[]>([]);
   const [input, setInput] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -69,13 +78,14 @@ export default function CodexAgentView({ agentId, ws, onFocus, focused }: Props)
 
   // Available models for the picker (codex `model/list`).
   useEffect(() => {
+    if (!isCodex) return;
     let cancelled = false;
     fetch('/api/codex/models')
       .then((r) => r.json())
       .then((d) => { if (!cancelled && Array.isArray(d?.models)) setModels(d.models); })
       .catch(() => { /* picker just shows "default" */ });
     return () => { cancelled = true; };
-  }, []);
+  }, [isCodex]);
 
   useEffect(() => {
     let attached = false;
@@ -128,11 +138,17 @@ export default function CodexAgentView({ agentId, ws, onFocus, focused }: Props)
   const submit = () => {
     const t = input.trim();
     if (!t) return;
-    const ok = ws.send({
-      type: 'codex:send', agentId, text: t,
-      model: model || undefined, effort: effort || undefined,
-    });
+    const ok = isCodex
+      ? ws.send({
+        type: 'codex:send', agentId, text: t,
+        model: model || undefined, effort: effort || undefined,
+      })
+      : ws.send({ type: 'localharness:send', agentId, text: t });
     if (ok) setInput('');
+  };
+
+  const stopTurn = () => {
+    ws.send({ type: 'localharness:cancel', agentId });
   };
 
   const startNewThread = () => {
@@ -146,39 +162,49 @@ export default function CodexAgentView({ agentId, ws, onFocus, focused }: Props)
 
   return (
     <div className="cxv" onMouseDown={() => onFocus?.()}>
-      <div className="cxv-toolbar">
-        <select
-          className="cxv-select"
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          title="Model"
-          aria-label="Model"
-        >
-          <option value="">Model: default</option>
-          {models.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <select
-          className="cxv-select"
-          value={effort}
-          onChange={(e) => setEffort(e.target.value)}
-          title="Reasoning effort"
-          aria-label="Reasoning effort"
-        >
-          <option value="">Reasoning: default</option>
-          <option value="minimal">minimal</option>
-          <option value="low">low</option>
-          <option value="medium">medium</option>
-          <option value="high">high</option>
-          <option value="xhigh">xhigh</option>
-        </select>
-        <div className="cxv-toolbar-sp" />
-        <button className="cxv-newthread" onClick={startNewThread} title="Start a new thread">
-          + New thread
-        </button>
-      </div>
+      {isCodex ? (
+        <div className="cxv-toolbar">
+          <select
+            className="cxv-select"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            title="Model"
+            aria-label="Model"
+          >
+            <option value="">Model: default</option>
+            {models.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select
+            className="cxv-select"
+            value={effort}
+            onChange={(e) => setEffort(e.target.value)}
+            title="Reasoning effort"
+            aria-label="Reasoning effort"
+          >
+            <option value="">Reasoning: default</option>
+            <option value="minimal">minimal</option>
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+            <option value="xhigh">xhigh</option>
+          </select>
+          <div className="cxv-toolbar-sp" />
+          <button className="cxv-newthread" onClick={startNewThread} title="Start a new thread">
+            + New thread
+          </button>
+        </div>
+      ) : (
+        <div className="cxv-toolbar">
+          <span className="cxv-select" style={{ border: 'none', opacity: 0.75 }}>LocalHarness · local model</span>
+          <div className="cxv-toolbar-sp" />
+          <button className="cxv-newthread" onClick={stopTurn} disabled={!working} title="Cancel the running turn">
+            Stop
+          </button>
+        </div>
+      )}
       <div className="cxv-body" ref={bodyRef}>
         {items.length === 0 && (
-          <div className="cxv-empty">{ws.connected ? 'Waiting for the Codex agent…' : 'Reconnecting…'}</div>
+          <div className="cxv-empty">{ws.connected ? `Waiting for the ${label} agent…` : 'Reconnecting…'}</div>
         )}
         {items.map((it) => (
           <CodexItemRow
@@ -203,9 +229,9 @@ export default function CodexAgentView({ agentId, ws, onFocus, focused }: Props)
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
           }}
-          placeholder="Message this Codex agent…  (Enter to send)"
+          placeholder={`Message this ${label} agent…  (Enter to send)`}
           rows={2}
-          aria-label="Message to Codex agent"
+          aria-label={`Message to ${label} agent`}
         />
         <button className="cxv-send" onClick={submit} disabled={!input.trim() || !ws.connected} title="Send" aria-label="Send">
           <Ic.send size={14} />

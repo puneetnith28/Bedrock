@@ -3,6 +3,7 @@ import { useState } from 'react';
 interface Flags {
   dangerouslySkipPermissions?: boolean;
   remoteControl?: boolean;
+  terminal?: boolean;
 }
 
 interface Props {
@@ -18,6 +19,7 @@ export default function CreateAgentModal({ projectCwd, onClose, onCreate }: Prop
   const [role, setRole] = useState('');
   const [skipPermissions, setSkipPermissions] = useState(false);
   const [remoteControl, setRemoteControl] = useState(false);
+  const [terminalMode, setTerminalMode] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +31,7 @@ export default function CreateAgentModal({ projectCwd, onClose, onCreate }: Prop
     if (cli === 'claude') {
       if (remoteControl) flags.remoteControl = true;
     }
+    if (cli === 'localharness' && terminalMode) flags.terminal = true;
     onCreate({
       name, cli,
       cwd: cwd || undefined,
@@ -53,7 +56,26 @@ export default function CreateAgentModal({ projectCwd, onClose, onCreate }: Prop
             <option value="opencode">OpenCode</option>
             <option value="gpt">GPT-OSS 120B (Groq)</option>
             <option value="nemotron">Nemotron (OpenRouter)</option>
+            <option value="localharness">LocalHarness (local model)</option>
           </select>
+
+          {cli === 'localharness' && (
+            <div style={{ marginTop: 12 }}>
+              <p style={{ fontSize: 12, opacity: 0.75, margin: '0 0 8px' }}>
+                Runs on your local model server (LOCAL_LLM_BASE_URL, default Ollama at
+                127.0.0.1:11434). Every permission it asks for becomes an approval gate here.
+              </p>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={terminalMode}
+                  onChange={e => setTerminalMode(e.target.checked)}
+                  style={{ width: 'auto' }}
+                />
+                <span style={{ fontSize: 13 }}>Terminal mode — the interactive REPL instead of the structured view</span>
+              </label>
+            </div>
+          )}
 
           {(cli === 'claude' || cli === 'opencode') && (
             <div style={{ marginTop: 12 }}>

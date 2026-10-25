@@ -30,7 +30,7 @@ import DownloadModal from './components/DownloadModal';
 import * as api from './api';
 import { speak, stopSpeaking } from './utils/speech';
 import type { Route, RosterAgent } from './utils/voiceRouting';
-import type { Project, Agent, Plan } from './api';
+import type { Project, Agent, Plan, PendingGate } from './api';
 
 type MainTab = 'terminals' | 'messages' | 'groupchat' | 'shared' | 'wiki' | 'activity' | 'usage';
 
@@ -262,12 +262,17 @@ export default function App() {
       if (status === 'stopped') setActiveGateAgent((cur) => (cur?.agentId === agentId ? null : cur));
     }
     if (msg.type === 'gate:triggered') {
-      const p = msg as unknown as { projectId: string; agentId: string; prompt: string; source: 'regex' | 'supervisor'; options?: string[] };
+      const p = msg as unknown as {
+        projectId: string; agentId: string; prompt: string;
+        source: PendingGate['source']; options?: string[]; acpOptions?: PendingGate['acpOptions'];
+      };
       setAgents((prev) => {
         const next = new Map(prev);
         const list = next.get(p.projectId) || [];
         next.set(p.projectId, list.map((a) =>
-          a.id === p.agentId ? { ...a, pendingGate: { prompt: p.prompt, source: p.source, options: p.options } } : a
+          a.id === p.agentId
+            ? { ...a, pendingGate: { prompt: p.prompt, source: p.source, options: p.options, acpOptions: p.acpOptions } }
+            : a
         ));
         return next;
       });
@@ -568,11 +573,11 @@ export default function App() {
     await loadAgents(agent.projectId);
   };
 
-  const handleResolveGate = async (decision: 'approve' | 'reject' | 'custom', customInput?: string) => {
+  const handleResolveGate = async (decision: 'approve' | 'reject' | 'custom', customInput?: string, optionId?: string) => {
     if (!activeGateAgent) return;
     const { projectId, agentId } = activeGateAgent;
     try {
-      await api.resolveGate(projectId, agentId, decision, customInput);
+      await api.resolveGate(projectId, agentId, decision, customInput, optionId);
     } catch (err) {
       // A 409 means the gate was already cleared elsewhere — just close.
       if (!(err instanceof Error && /No pending gate/.test(err.message))) throw err;
