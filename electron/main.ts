@@ -408,3 +408,7 @@ app.on('window-all-closed', () => {
 });
 
 // External webview escapes restricted via setWindowOpenHandler
+
+export function isAllowedIpcSender(senderUrl: string): boolean {
+  return senderUrl.startsWith('http://localhost') || senderUrl.startsWith('file://');
+}
