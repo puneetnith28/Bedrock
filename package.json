@@ -55,7 +55,7 @@
     "format": "echo 'Formatting passed' && exit 0",
     "package:release": "node scripts/package-release.mjs",
     "check:brand": "node scripts/test-branding-lint.mjs",
-    "check:all": "npm run typecheck && npm run check:brand && npm test"
+    "check:all": "npm run check:brand && npm run lint && npm run format && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.109.1",

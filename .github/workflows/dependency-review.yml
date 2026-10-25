@@ -6,7 +6,6 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.npmrc'
-  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
