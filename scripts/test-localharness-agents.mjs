@@ -96,6 +96,13 @@ try {
   t(items(agent.id).some((i) => i.kind === 'system' && i.text === 'Turn cancelled.'), 'says the turn was cancelled');
   t(!lh.interruptAgent(agent.id) || lh.getSessionInfo(agent.id).busy, 'interrupt is a no-op when idle');
 
+  // 4b. Bring-up progress is not a reply.
+  const slowstart = await lh.askAgent(agent.id, 'slowstart');
+  t(slowstart.text === 'ready', 'bring-up progress lines are not part of the reply', JSON.stringify(slowstart.text));
+  const bringup = items(agent.id).filter((i) => i.id.startsWith('bringup-'));
+  t(bringup.length === 1 && bringup[0].kind === 'system' && /17s so far/.test(bringup[0].text),
+    'they show as one system line that updates in place', JSON.stringify(bringup.map((b) => b.text)));
+
   // 5. Reasoning.
   await lh.askAgent(agent.id, 'think');
   t(items(agent.id).some((i) => i.kind === 'reasoning' && i.text === 'Considering it.'), 'thought chunks become a reasoning item');

@@ -125,6 +125,14 @@ export function setPermissionHandlers(h: PermissionHandlers | null): void {
 
 /** The opening of LocalHarness's BRINGUP_FAILED / BRINGUP_EXITED notices (channels/acp.py). */
 const BRINGUP_FAILURE = /^The session could not be started/;
+/**
+ * Its BRINGUP_STATUS line, streamed as agent text every few seconds while the
+ * first prompt waits for the session to come up. Progress, not a reply: shown
+ * as one system line that updates in place, and never part of a turn's text —
+ * otherwise ask_agent would return "Starting the session — 2s so far…" as the
+ * agent's answer.
+ */
+const BRINGUP_STATUS = /^Starting the session — \d+s so far…\s*$/;
 const sessions = new Map<string, LhSession>();
 let onStatus: StatusFn = () => {};
 
@@ -241,6 +249,10 @@ function onToolCallUpdate(s: LhSession, u: any): void {
 
 function onChunk(s: LhSession, kind: 'message' | 'reasoning', text: string): void {
   if (!text) return;
+  if (kind === 'message' && BRINGUP_STATUS.test(text)) {
+    upsert(s, { id: `bringup-${s.sessionId}`, kind: 'system', text: text.trim(), ts: now() });
+    return;
+  }
   // An answer arriving with no turn open is a notice the agent sends on its
   // own (bring-up progress, a pending decision). Show it; it is no turn's reply.
   const t = s.turn;
@@ -279,7 +291,11 @@ function onUpdate(s: LhSession, params: Record<string, any>): void {
       return;
     }
     case 'current_mode_update': {
-      s.mode = String(u.currentModeId || s.mode);
+      const next = String(u.currentModeId || s.mode);
+      // LocalHarness re-sends an unchanged mode (after the trust question,
+      // for one); only a real change is worth a line.
+      if (next === s.mode) return;
+      s.mode = next;
       const name = s.modes.find((m) => m.id === s.mode)?.name || s.mode;
       system(s, `Permission mode: ${name}`);
       return;

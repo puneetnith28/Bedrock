@@ -137,6 +137,39 @@ console.log('\nACP client tests\n');
   }
 }
 
+// 8b. Keep-awake: blank lines on stdin while a request is outstanding, and
+// none when idle — the Windows stdin deadlock workaround.
+{
+  const awake = new AcpConnection({
+    command: process.execPath, args: [FAKE], cwd: process.cwd(), env: process.env, keepAwakeMs: 150,
+  });
+  await awake.start();
+  await awake.request('initialize', { protocolVersion: 1, clientCapabilities: {} });
+  const { sessionId } = await awake.request('session/new', { cwd: process.cwd(), mcpServers: [] });
+  let said = '';
+  awake.onNotification((m, p) => { if (p.update?.sessionUpdate === 'agent_message_chunk') said = p.update.content.text; });
+  await prompt(awake, sessionId, 'countpokes');
+  t(Number(said) >= 4, 'writes blank lines while a request waits', `got ${said}`);
+  // Idle now: count again over the same window by asking from a fresh turn's start.
+  await new Promise((r) => setTimeout(r, 600));
+  const idleStart = Date.now();
+  await prompt(awake, sessionId, 'echo:x');
+  t(Date.now() - idleStart < 1500, 'and the turns still answer normally');
+  awake.close(300);
+
+  const quiet = new AcpConnection({
+    command: process.execPath, args: [FAKE], cwd: process.cwd(), env: process.env, keepAwakeMs: 0,
+  });
+  await quiet.start();
+  await quiet.request('initialize', { protocolVersion: 1, clientCapabilities: {} });
+  const q = await quiet.request('session/new', { cwd: process.cwd(), mcpServers: [] });
+  let quietSaid = '';
+  quiet.onNotification((m, p) => { if (p.update?.sessionUpdate === 'agent_message_chunk') quietSaid = p.update.content.text; });
+  await prompt(quiet, q.sessionId, 'countpokes');
+  t(quietSaid === '0', 'writes none when disabled', `got ${quietSaid}`);
+  quiet.close(300);
+}
+
 // 9. A binary that does not exist rejects start().
 {
   const conn = new AcpConnection({ command: 'definitely-not-a-real-binary-xyz', args: [], cwd: process.cwd(), env: process.env });
