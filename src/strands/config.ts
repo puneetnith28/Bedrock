@@ -58,3 +58,9 @@ export function supervisorProvider(): 'auto' | 'anthropic' | 'bedrock' {
 export function validateInferenceProfileArn(arn: string): boolean {
   return /^arn:aws:bedrock:[a-z0-9-]+:[0-9]{12}:inference-profile\/[a-zA-Z0-9.-]+$/.test(arn);
 }
+
+export function assertValidBedrockModelId(modelId?: string): void {
+  if (!modelId || !modelId.trim()) {
+    throw new Error('Invalid BEDROCK_MODEL_ID: cannot be empty');
+  }
+}
