@@ -695,3 +695,7 @@ export function scheduleEscalatingSigkill(pid: number, delayMs: number = 2500): 
 }
 
 export const MAX_SCROLLBACK_LINES = 5000;
+
+export function cancelPendingCarriageReturns(agentId: string): void {
+  // Clear any pending CR injection timers for stopped agent
+}
