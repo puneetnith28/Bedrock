@@ -341,11 +341,46 @@ async function callModel(
   return { update: { classification, summary }, model };
 }
 
+let consecutiveFailures = 0;
+let nextAllowedAt = 0;
+
+export function getConsecutiveFailures(): number {
+  return consecutiveFailures;
+}
+
+export function resetBackoff(): void {
+  consecutiveFailures = 0;
+  nextAllowedAt = 0;
+}
+
+export function calculateBackoffDelay(failures: number, baseMs = 2000, maxMs = 60000, jitter = 0.2): number {
+  if (failures <= 0) return 0;
+  const raw = Math.min(maxMs, baseMs * Math.pow(2, failures - 1));
+  const factor = 1 + (Math.random() * 2 - 1) * jitter;
+  return Math.min(maxMs, Math.max(baseMs, Math.round(raw * factor)));
+}
+
+export function shouldThrottleDueToBackoff(): { throttled: boolean; remainingMs: number } {
+  const remaining = nextAllowedAt - Date.now();
+  if (remaining > 0) {
+    return { throttled: true, remainingMs: remaining };
+  }
+  return { throttled: false, remainingMs: 0 };
+}
+
 /**
  * Classify one batch of agent output. Walks the model ladder on rate-limit /
- * missing-model errors and remembers what worked.
+ * missing-model errors and remembers what worked with jittered exponential backoff.
  */
 export async function classifyWithAnthropic(prompt: string): Promise<SupervisorUpdate> {
+  const throttle = shouldThrottleDueToBackoff();
+  if (throttle.throttled) {
+    throw new AnthropicSupervisorError(
+      `Anthropic fallback rate-limited; backing off for ${Math.ceil(throttle.remainingMs / 1000)}s`,
+      'rate-limit'
+    );
+  }
+
   const cred = resolveCredential();
 
   // Prefer the model that worked last, until it is time to re-probe.
@@ -364,6 +399,7 @@ export async function classifyWithAnthropic(prompt: string): Promise<SupervisorU
       }
       resolvedModel = model;
       resolvedAt = Date.now();
+      resetBackoff();
       return update;
     } catch (err) {
       const e = err instanceof AnthropicSupervisorError
@@ -376,5 +412,9 @@ export async function classifyWithAnthropic(prompt: string): Promise<SupervisorU
     }
   }
 
+  consecutiveFailures++;
+  const delay = calculateBackoffDelay(consecutiveFailures);
+  nextAllowedAt = Date.now() + delay;
   throw lastError || new AnthropicSupervisorError('No Anthropic model available', 'model');
 }
+
