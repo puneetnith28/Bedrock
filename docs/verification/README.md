@@ -10,7 +10,8 @@ production build and an end-to-end run against the real LocalHarness.
 | [2](round-2.md) | `253e8d7` skills, memory | pass | 47/47 | — | — | none |
 | [3](round-3.md) | `1e396fa` controls, Team tab | pass | 48/48 | pass | — | none |
 | [4](round-4.md) | `afbbad1` Supervisor key fix | pass | 49/49 | — | — | none |
-| [5](round-5.md) | `33dd8e6` docs (final) | pass | 49/49 | pass | 5/5 | none |
+| [5](round-5.md) | `33dd8e6` docs | pass | 49/49 | pass | 5/5 | none |
+| [6](round-6-from-github.md) | `84fcb5b` a fresh clone of `main` | pass | 49/49 | pass | live 47/47 · demo 18/18 | the preview banner (fixed) |
 
 Only one suite is left out of every round: `test-supervisor.mjs`. It makes real, paid Anthropic
 API calls with the machine's credentials, so run it on purpose with `npm run test:supervisor`.
@@ -42,10 +43,19 @@ these steps:
 | LocalHarness's "Starting the session…" progress line was returned as the agent's reply | `0d699a4` |
 | The local Supervisor's key went where `OpenAIModel` ignores it, so it depended on `OPENAI_API_KEY` | `afbbad1` |
 
+## Round 6
+
+Rounds 1-5 ran in the working copy. Round 6 clones `main` from GitHub, installs from
+nothing, and checks the built app three ways: every offline suite, a **live** daemon and
+web server driven over REST (which started a real LocalHarness agent), and the **hosted
+demo** in a headless browser with no backend behind it. See
+[round-6-from-github.md](round-6-from-github.md).
+
 ## Not verified here
 
 - **A real local model.** Neither Ollama nor LM Studio is installed on the machine these rounds
   ran on, so the model was a mock. The harness, the protocol and every Bedrock code path were
   real.
-- **A browser click-through of the new UI.** The UI was typechecked and built in rounds 3 and 5,
-  but the full web app was not launched against a browser.
+- **The new UI clicked through against a live backend.** Round 6 drives the whole interface in
+  a real browser, but against the demo fixtures. The live-server round exercises the same
+  features over REST rather than by clicking.
