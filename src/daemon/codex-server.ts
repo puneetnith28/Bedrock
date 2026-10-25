@@ -202,3 +202,5 @@ export class CodexAppServer {
     }
   }
 }
+
+export const FALLBACK_MODELS = ['o1', 'o3-mini', 'gpt-4o'];
