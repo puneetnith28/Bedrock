@@ -16,6 +16,7 @@ import { removeConduitSections } from './instruction-files.js';
 import { discoverSkills } from './skills.js';
 import * as memory from './memory.js';
 import { readAgentTemplates } from './agent-templates.js';
+import { listLocalModels, localLlmSettings } from './local-llm.js';
 import { listPlugins, pluginsDir, setPluginEnabled, PLUGIN_API_VERSION } from './plugins.js';
 
 function expandHome(p: string): string {
@@ -550,6 +551,38 @@ export function createRouter(
     if (!memory.forgetFact(req.params.id, req.params.fid)) { res.status(404).json({ error: 'Fact not found' }); return; }
     broadcast({ type: 'memory:updated', projectId: req.params.id });
     res.status(204).end();
+  });
+
+  // --- LocalHarness controls (mode, model, slash commands) ---
+  router.get('/projects/:id/agents/:aid/localharness', async (req: Request, res: Response) => {
+    const agent = storage.getAgent(req.params.id, req.params.aid);
+    if (!agent || agent.cli !== 'localharness') { res.status(404).json({ error: 'LocalHarness agent not found' }); return; }
+    try {
+      const r = await daemon.request('localharness:info', { agentId: agent.id });
+      res.json({ running: !!r.info, ...(r.info || {}) });
+    } catch (err) {
+      res.status(503).json({ error: 'Daemon unavailable: ' + (err instanceof Error ? err.message : String(err)) });
+    }
+  });
+
+  router.post('/projects/:id/agents/:aid/localharness/mode', async (req: Request, res: Response) => {
+    const agent = storage.getAgent(req.params.id, req.params.aid);
+    if (!agent || agent.cli !== 'localharness') { res.status(404).json({ error: 'LocalHarness agent not found' }); return; }
+    try {
+      const r = await daemon.request('localharness:setMode', { agentId: agent.id, mode: str(req.body?.mode, 40) });
+      if (!r.ok) { res.status(400).json({ error: r.error || 'Could not change the mode' }); return; }
+      broadcast({ type: 'org:changed' });
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(503).json({ error: 'Daemon unavailable: ' + (err instanceof Error ? err.message : String(err)) });
+    }
+  });
+
+  // The local model server's models — for the agent and Supervisor model pickers.
+  router.get('/local-llm/models', async (_req: Request, res: Response) => {
+    const settings = localLlmSettings();
+    const r = await listLocalModels(settings, { fresh: true });
+    res.json({ ...r, configured: settings.configured, model: settings.model });
   });
 
   // --- Agent definitions in the project's .bedrock/agents/*.yaml ---

@@ -386,6 +386,10 @@ async function handleRequest(ws: WebSocket, req: DaemonRequest): Promise<void> {
       }
       case 'agent:replay':
         return reply(runtime.getReplay(req.agentId));
+      case 'localharness:info':
+        return reply({ info: runtime.localHarnessInfo(req.agentId) });
+      case 'localharness:setMode':
+        return reply(await runtime.setLocalHarnessMode(req.agentId, String(req.mode || '')));
       case 'supervisor:health':
         return reply(supervisorHealth());
       case 'brain:state':
