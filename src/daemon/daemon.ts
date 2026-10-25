@@ -22,7 +22,7 @@ import { hookEventToStatus } from '../hook-config.js';
 import { cleanStaleCodexMcp } from '../mcp-config.js';
 import { Orchestrator } from './orchestrator.js';
 import { hookEvents } from './hook-events.js';
-import { attachWatcher, detachWatcher, supervisorHealth } from '../strands/watcher.js';
+import { attachWatcher, detachWatcher, supervisorHealth, triggerGate } from '../strands/watcher.js';
 import { resetGateSettingsCache } from '../gate-policy.js';
 import {
   orgSnapshot,
@@ -184,6 +184,14 @@ function emitAgentDispatch(d: AgentDispatch) {
   broadcast({ kind: 'event', event: 'agent:dispatch', payload: d });
 }
 
+// An ACP agent's permission request is an approval gate like any other:
+// raised through triggerGate (group chat, gate:triggered, never auto-approved
+// — see classifyGate), resolved through gate-resolve.ts.
+runtime.setPermissionHandlers({
+  raise: (projectId, agentId, prompt, options) => triggerGate(projectId, agentId, prompt, 'acp', broadcast, options),
+  cleared: (_projectId, agentId) => broadcast({ kind: 'event', event: 'gate:resolved', agentId }),
+});
+
 // One-time cleanup: drop stale PTY-era Codex MCP entries from the global
 // ~/.codex/config.toml — Codex agents now load MCP via codex app-server.
 {
@@ -282,6 +290,9 @@ async function handleRequest(ws: WebSocket, req: DaemonRequest): Promise<void> {
       case 'brain:switch': orchestrator.switchConversation(req.conversationId); return;
       case 'brain:delete': orchestrator.deleteConversation(req.conversationId); return;
       case 'gates:reload': resetGateSettingsCache(); return;
+      case 'gate:answer':
+        runtime.answerPermission(req.agentId, typeof req.optionId === 'string' ? req.optionId : null);
+        return;
     }
     return;
   }

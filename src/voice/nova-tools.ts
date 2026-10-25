@@ -30,6 +30,7 @@
  */
 import { DAEMON_HTTP_URL } from '../daemon/protocol.js';
 import type { NovaTool } from './nova.js';
+import type { GateSource } from '../types.js';
 
 /** Fast tools time out quickly; a slow one here would stall the conversation. */
 const FAST_TIMEOUT_MS = 8000;
@@ -197,7 +198,7 @@ export interface GateFound {
   agentId: string;
   agentName: string;
   prompt: string;
-  source: 'regex' | 'supervisor';
+  source: GateSource;
 }
 
 export type GateLookup =

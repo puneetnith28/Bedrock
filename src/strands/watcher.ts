@@ -31,6 +31,7 @@ import {
 import { checkGate, stripAnsi, gateQuestion } from '../gatePatterns.js';
 import { shouldAutoApprove } from '../gate-policy.js';
 import type { DaemonMessage } from '../daemon/protocol.js';
+import type { GateOption, GateSource } from '../types.js';
 import {
   anthropicCandidates,
   classifyWithAnthropic,
@@ -127,8 +128,10 @@ export function triggerGate(
   projectId: string,
   agentId: string,
   prompt: string,
-  source: 'regex' | 'supervisor',
+  source: GateSource,
   broadcast: Broadcast,
+  /** source 'acp': the answers the agent offered. */
+  acpOptions?: GateOption[],
 ): boolean {
   const agent = getAgent(projectId, agentId);
   if (!agent) return false;
@@ -179,17 +182,24 @@ export function triggerGate(
     return true;
   }
 
-  updateAgent(projectId, agentId, { pendingGate: { prompt: clean, source } });
+  // An ACP gate carries the exact answers the agent will accept; the names are
+  // what the UI shows, the ids are what resolution sends back.
+  const options = acpOptions?.length ? acpOptions.map((o) => o.name) : undefined;
+  updateAgent(projectId, agentId, {
+    pendingGate: { prompt: clean, source, ...(options ? { options, acpOptions } : {}) },
+  });
 
   const entry = supervisorEntry(
     source === 'regex'
       ? `[Gate] ${agent.name} needs your decision:\n${summariseTail(clean)}`
-      : `[Gate] ${agent.name} is about to do something risky:\n${summariseTail(clean, 10)}`,
+      : source === 'acp'
+        ? `[Gate] ${agent.name} asks permission:\n${summariseTail(clean, 10)}`
+        : `[Gate] ${agent.name} is about to do something risky:\n${summariseTail(clean, 10)}`,
     'risky_action',
   );
   try { appendGroupChat(projectId, entry); } catch { /* ignore */ }
   broadcast({ kind: 'event', event: 'groupchat:message', payload: { ...entry, projectId } });
-  broadcast({ kind: 'event', event: 'gate:triggered', agentId, projectId, prompt: clean, source });
+  broadcast({ kind: 'event', event: 'gate:triggered', agentId, projectId, prompt: clean, source, ...(options ? { options } : {}) });
   return true;
 }
 

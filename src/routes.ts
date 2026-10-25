@@ -505,9 +505,11 @@ export function createRouter(
   router.post('/projects/:id/agents/:aid/gate/resolve', (req: Request, res: Response) => {
     const decision = str(req.body?.decision, 20) as GateDecision;
     const customInput = str(req.body?.customInput, 4000);
+    // ACP gates only: which of the agent's offered answers to pick.
+    const optionId = str(req.body?.optionId, 100) || undefined;
     // The mechanics live in gate-resolve.ts because voice can approve too, and
     // two copies of "what actually reaches the agent" would drift apart.
-    const r = resolveGate(daemon, broadcast, req.params.id, req.params.aid, decision, { customInput });
+    const r = resolveGate(daemon, broadcast, req.params.id, req.params.aid, decision, { customInput, optionId });
     if (!r.ok) { res.status(r.status).json({ error: r.error }); return; }
     res.json({ success: true, action: r.action });
   });

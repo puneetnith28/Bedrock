@@ -23,7 +23,7 @@
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import type { Agent } from '../types.js';
+import type { Agent, GateOption } from '../types.js';
 import type { CodexItem } from './protocol.js';
 import { AcpConnection } from './acp-client.js';
 import { textListener } from './item-text.js';
@@ -71,6 +71,29 @@ interface Turn {
   resolve: (r: TurnResult) => void;
 }
 
+/** ACP's answer to a permission request. */
+type PermissionOutcome = { outcome: { outcome: 'selected'; optionId: string } | { outcome: 'cancelled' } };
+
+/** A permission request the agent is waiting on; its JSON-RPC reply is `resolve`. */
+interface PendingPermission {
+  title: string;
+  options: GateOption[];
+  prompt: string;
+  resolve: (o: PermissionOutcome) => void;
+}
+
+/**
+ * How a permission request becomes a Bedrock approval gate, installed by the
+ * daemon (which owns broadcasting). Kept as an injected hook so this module
+ * does not import the watcher, which imports the runtime router.
+ */
+export interface PermissionHandlers {
+  /** Raise the gate. False when it could not be (the agent already has one). */
+  raise(projectId: string, agentId: string, prompt: string, options: GateOption[]): boolean;
+  /** The gate went away without a human answer (cancel, stop, crash). */
+  cleared(projectId: string, agentId: string): void;
+}
+
 interface LhSession {
   agent: Agent;
   conn: AcpConnection;
@@ -89,9 +112,16 @@ interface LhSession {
   commands: Array<{ name: string; description?: string }>;
   model: string;
   stopping: boolean;
+  /** Oldest first; only the head is raised as a gate. */
+  permissions: PendingPermission[];
 }
 
 const MAX_ITEMS = 500;
+let permissionHandlers: PermissionHandlers | null = null;
+
+export function setPermissionHandlers(h: PermissionHandlers | null): void {
+  permissionHandlers = h;
+}
 
 /** The opening of LocalHarness's BRINGUP_FAILED / BRINGUP_EXITED notices (channels/acp.py). */
 const BRINGUP_FAILURE = /^The session could not be started/;
@@ -292,6 +322,8 @@ function runNext(s: LhSession): void {
 /** `quiet`: the caller reports the failure itself, so add no error item. */
 function endTurn(s: LhSession, turn: Turn, stopReason: string, error?: string, opts: { quiet?: boolean } = {}): void {
   if (s.turn !== turn) return;
+  // A question still open when its turn ended can no longer be acted on.
+  cancelPermissions(s, { reply: true });
   closeStreams(s);
   // A tool call left running when the turn ended will never complete now.
   for (const [, id] of s.toolItems) {
@@ -305,6 +337,102 @@ function endTurn(s: LhSession, turn: Turn, stopReason: string, error?: string, o
   else if (stopReason === 'max_tokens' || stopReason === 'max_turn_requests') system(s, `Turn stopped: ${stopReason.replace(/_/g, ' ')}.`);
   turn.resolve({ stopReason, text: turn.texts.join('').trim(), ...(error ? { error } : {}) });
   runNext(s);
+}
+
+// ─────────────────────────── permission → approval gate ───────────────────────────
+
+const CANCELLED: PermissionOutcome = { outcome: { outcome: 'cancelled' } };
+
+/** The first useful line of what the tool call would do: a command, a path, a URL. */
+function describeInput(input: any): string[] {
+  if (!input || typeof input !== 'object') return [];
+  const lines: string[] = [];
+  const pick = (k: string) => (typeof input[k] === 'string' && input[k].trim() ? input[k].trim() : '');
+  const command = pick('command') || pick('cmd');
+  const target = pick('path') || pick('file_path') || pick('filepath');
+  const url = pick('url');
+  if (command) lines.push(`$ ${command}`);
+  if (target) lines.push(`path: ${target}`);
+  if (url) lines.push(`url: ${url}`);
+  return lines.map((l) => (l.length > 400 ? l.slice(0, 399) + '…' : l));
+}
+
+/** The gate text: who asks, for what, and the answers on offer. */
+function permissionPrompt(s: LhSession, toolCall: any, options: GateOption[]): string {
+  const title = String(toolCall?.title || 'a tool call');
+  return [
+    `${s.agent.name} (LocalHarness) asks permission:`,
+    '',
+    `    ${title}`,
+    ...describeInput(toolCall?.rawInput).map((l) => `    ${l}`),
+    '',
+    `Options: ${options.map((o) => o.name).join(' · ')}`,
+  ].join('\n');
+}
+
+/** The agent asked; park its reply until a human answers the gate. */
+function requestPermission(s: LhSession, params: Record<string, any>): Promise<PermissionOutcome> {
+  const options: GateOption[] = (Array.isArray(params.options) ? params.options : [])
+    .filter((o: any) => o && typeof o.optionId === 'string')
+    .map((o: any) => ({ id: String(o.optionId), name: String(o.name || o.optionId), kind: String(o.kind || '') }));
+  const title = String(params.toolCall?.title || 'a tool call');
+  // Nobody to ask, or nothing to choose: refuse. Never answer yes for a human.
+  if (!permissionHandlers || !options.length || s.stopping) {
+    system(s, `Refused a permission request nobody could answer: ${title}`);
+    return Promise.resolve(CANCELLED);
+  }
+  return new Promise((resolve) => {
+    s.permissions.push({ title, options, prompt: permissionPrompt(s, params.toolCall, options), resolve });
+    if (s.permissions.length === 1) raiseNextPermission(s);
+  });
+}
+
+function raiseNextPermission(s: LhSession): void {
+  while (s.permissions.length) {
+    const head = s.permissions[0];
+    if (permissionHandlers?.raise(s.agent.projectId, s.agent.id, head.prompt, head.options)) {
+      system(s, `Waiting for approval: ${head.title}`);
+      setStatus(s, 'awaiting_input');
+      return;
+    }
+    // A gate could not be raised (another one is already open on this agent).
+    // Refusing is the only answer that is never wrong.
+    s.permissions.shift();
+    head.resolve(CANCELLED);
+    system(s, `Refused (another approval was already pending): ${head.title}`);
+  }
+}
+
+/**
+ * Answer the oldest pending permission request — called once a human resolved
+ * the gate (gate-resolve.ts → daemon `gate:answer`). `optionId` null cancels.
+ * Returns false when nothing was pending.
+ */
+export function answerPermission(agentId: string, optionId: string | null): boolean {
+  const s = sessions.get(agentId);
+  const head = s?.permissions[0];
+  if (!s || !head) return false;
+  s.permissions.shift();
+  const chosen = optionId ? head.options.find((o) => o.id === optionId) : undefined;
+  // An id the agent did not offer is not an answer to this question.
+  head.resolve(chosen ? { outcome: { outcome: 'selected', optionId: chosen.id } } : CANCELLED);
+  system(s, chosen ? `${chosen.name}: ${head.title}` : `Refused: ${head.title}`);
+  if (s.permissions.length) raiseNextPermission(s);
+  else if (s.turn) setStatus(s, 'running');
+  return true;
+}
+
+/**
+ * Answer every pending request with `cancelled` and take the gate down —
+ * on cancel, stop and exit. ACP requires a client that cancels a turn to
+ * answer its open permission requests that way.
+ */
+function cancelPermissions(s: LhSession, opts: { reply: boolean }): void {
+  if (!s.permissions.length) return;
+  for (const p of s.permissions.splice(0)) if (opts.reply) p.resolve(CANCELLED);
+  try { updateAgent(s.agent.projectId, s.agent.id, { pendingGate: undefined }); }
+  catch { /* project may be gone */ }
+  permissionHandlers?.cleared(s.agent.projectId, s.agent.id);
 }
 
 // ─────────────────────────── lifecycle ───────────────────────────
@@ -342,10 +470,13 @@ export async function startAgent(agent: Agent, statusFn: StatusFn, prepared: Pre
     shell: prepared.shell,
     label: `localharness:${agent.name}`,
   });
-  // Until approval gates are wired in, refuse every permission request: a
-  // client that cannot ask a human must not answer yes on its behalf.
-  conn.onRequest(async (method) => {
-    if (method === 'session/request_permission') return { outcome: { outcome: 'cancelled' } };
+  // The agent's questions become approval gates. Nothing else is served: no
+  // fs or terminal capability was advertised, so none should arrive.
+  let session: LhSession | null = null;
+  conn.onRequest(async (method, params) => {
+    if (method === 'session/request_permission') {
+      return session ? requestPermission(session, params) : CANCELLED;
+    }
     throw new Error(`Bedrock does not serve ${method}`);
   });
 
@@ -387,7 +518,9 @@ export async function startAgent(agent: Agent, statusFn: StatusFn, prepared: Pre
     commands: [],
     model: prepared.model,
     stopping: false,
+    permissions: [],
   };
+  session = s;
   sessions.set(agent.id, s);
 
   conn.onNotification((method, params) => {
@@ -403,7 +536,9 @@ export async function startAgent(agent: Agent, statusFn: StatusFn, prepared: Pre
 
   system(s, `LocalHarness online — ${prepared.model} at ${prepared.baseUrl}`
     + (prepared.mcp ? '' : ' (Bedrock messaging unavailable: run `npm run build`)'));
-  try { updateAgent(agent.projectId, agent.id, { status: 'running', pid: conn.pid, lastExitCode: null, lastExitSignal: null }); }
+  // A gate left over from a previous run answers a question no process is
+  // asking any more.
+  try { updateAgent(agent.projectId, agent.id, { status: 'running', pid: conn.pid, pendingGate: undefined, lastExitCode: null, lastExitSignal: null }); }
   catch { /* project may be gone */ }
   onStatus(agent.id, 'running');
   setStatus(s, 'awaiting_input');
@@ -417,6 +552,8 @@ function onExit(s: LhSession, code: number | null): void {
   // last words from stderr; the open turn ends quietly underneath it.
   const crashed = !s.stopping;
   s.stopping = true;
+  // The process is gone, so there is no one to reply to — only the gate to take down.
+  cancelPermissions(s, { reply: false });
   const why = `LocalHarness exited (code ${code ?? 'none'})`;
   if (s.turn) endTurn(s, s.turn, 'error', why, { quiet: true });
   for (const q of s.queue.splice(0)) q.resolve({ stopReason: 'error', text: '', error: why });
@@ -433,6 +570,7 @@ export function stopAgent(agentId: string): boolean {
   const s = sessions.get(agentId);
   if (!s) return false;
   s.stopping = true;
+  cancelPermissions(s, { reply: true });
   if (s.turn) s.conn.notify('session/cancel', { sessionId: s.sessionId });
   s.conn.close(2_000);
   // Report stopped now; the process exit that follows finds the session gone.
@@ -489,6 +627,7 @@ export async function askAgent(agentId: string, message: string, timeoutMs = 300
 export function interruptAgent(agentId: string): boolean {
   const s = sessions.get(agentId);
   if (!s || !s.turn) return false;
+  cancelPermissions(s, { reply: true });
   s.conn.notify('session/cancel', { sessionId: s.sessionId });
   return true;
 }
