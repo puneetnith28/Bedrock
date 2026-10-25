@@ -15,7 +15,7 @@ import { WebSocket } from 'ws';
 
 const BASE = process.env.CONDUIT_URL || 'http://localhost:3200';
 const AUTH = process.env.CONDUIT_AUTH || '';
-const CLIS = ['claude', 'codex', 'gemini', 'opencode', 'gpt', 'nemotron'];
+const CLIS = ['claude', 'codex', 'gemini', 'opencode', 'gpt', 'nemotron', 'localharness'];
 
 const headers = { 'Content-Type': 'application/json' };
 if (AUTH) headers.Authorization = 'Basic ' + Buffer.from(AUTH).toString('base64');
