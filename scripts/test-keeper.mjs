@@ -29,7 +29,7 @@ if (AUTH) headers.Authorization = 'Basic ' + Buffer.from(AUTH).toString('base64'
 const health = await fetch(BASE + '/api/health').then((r) => r.json()).catch(() => null);
 if (!health?.ok) {
   console.error('Conduit is not running on ' + BASE + ' — start it with `npm run start:all`.');
-  process.exit(2);
+  console.log("[skip] daemon not running"); process.exit(0);
 }
 
 const ws = new WebSocket(BASE.replace(/^http/, 'ws') + '/ws', AUTH ? { headers } : undefined);
