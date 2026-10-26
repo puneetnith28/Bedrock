@@ -59,18 +59,18 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.109.1",
-    "@aws-sdk/client-bedrock-runtime": "^3.1124.0",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "@opentelemetry/api": "^1.9.1",
-    "@strands-agents/sdk": "^1.16.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1156.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@opentelemetry/api": "^1.10.0",
+    "@strands-agents/sdk": "^1.22.0",
     "chokidar": "^5.0.0",
     "dotenv": "^16.6.1",
-    "electron-updater": "^6.8.9",
+    "electron-updater": "^6.8.11",
     "express": "^4.21.0",
-    "marked": "^18.0.0",
+    "marked": "^18.1.1",
     "openai": "^6.49.0",
     "uuid": "^10.0.0",
-    "ws": "^8.18.0"
+    "ws": "^8.22.0"
   },
   "optionalDependencies": {
     "node-pty": "^1.2.0-beta.12"
@@ -80,7 +80,7 @@
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@types/uuid": "^10.0.0",
-    "@types/ws": "^8.5.12",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^4.3.1",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
